@@ -616,12 +616,14 @@ function HeatMap() {
             {visualizationType === "heatmap" ? (
               <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
                 <Box sx={{ display: "flex", width: 300 }}>
+                  <Typography variant="caption">Low Usage</Typography>
                   <Box
                     sx={{
                       background:
                         "linear-gradient(to right, #ffffcc, #ffeda0, #fed976, #feb24c, #fd8d3c, #fc4e2a, #e31a1c, #b10026)",
                       height: 20,
                       width: "100%",
+                      opacity: 0.6,
                     }}
                   />
                 </Box>
@@ -632,7 +634,6 @@ function HeatMap() {
                     width: 300,
                   }}
                 >
-                  <Typography variant="caption">Low Usage</Typography>
                   <Typography variant="caption">High Usage</Typography>
                 </Box>
               </Box>
