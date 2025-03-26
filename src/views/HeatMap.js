@@ -259,14 +259,22 @@ function HeatMap() {
       // Generate heat map data points based on actual movement data
       const heatData = [];
       const movementCounts = {};
+      let maxMovementCount = 0;
 
       // Count movements per location
       movements.forEach((movement) => {
         const location = movement.toLocation;
         if (location) {
           movementCounts[location] = (movementCounts[location] || 0) + 1;
+          maxMovementCount = Math.max(
+            maxMovementCount,
+            movementCounts[location]
+          );
         }
       });
+
+      console.log("Movement counts:", movementCounts);
+      console.log("Max movement count:", maxMovementCount);
 
       // Convert movement counts to heat points
       floorPlan.rooms.forEach((room) => {
@@ -277,14 +285,25 @@ function HeatMap() {
         // Get movement count for this room (if any)
         const movementCount = movementCounts[room.id] || 0;
 
-        // Scale the heat value based on movement count
-        // More movements = more heat points
-        const heatValue = Math.min(10, Math.max(1, movementCount / 2));
+        // Skip rooms with no movement if we have data
+        if (maxMovementCount > 0 && movementCount === 0) {
+          return;
+        }
 
-        for (let i = 0; i < heatValue * 5; i++) {
+        // Scale the heat value based on movement count relative to max count
+        // This ensures the heat intensity is proportional to actual usage
+        const heatIntensity =
+          maxMovementCount > 0 ? movementCount / maxMovementCount : 0.2; // Default low intensity if no data
+
+        // More movements = more heat points and more concentrated
+        const pointCount = Math.max(5, Math.round(heatIntensity * 50));
+        const spreadFactor = 1 - heatIntensity * 0.7; // Less spread for high intensity
+
+        for (let i = 0; i < pointCount; i++) {
           // Add some randomness to spread points within the room
-          const offsetX = (Math.random() - 0.5) * room.width * 0.8;
-          const offsetY = (Math.random() - 0.5) * room.height * 0.8;
+          // Higher intensity = less spread (more concentrated heat)
+          const offsetX = (Math.random() - 0.5) * room.width * spreadFactor;
+          const offsetY = (Math.random() - 0.5) * room.height * spreadFactor;
 
           heatData.push([centerX + offsetX, centerY + offsetY]);
         }
@@ -292,16 +311,16 @@ function HeatMap() {
 
       // Only create heat map if we have data points
       if (heatData.length > 0) {
-        // Create a density estimation function with increased bandwidth for smoother transitions
+        // Create a density estimation function with appropriate bandwidth
         const densityData = d3
           .contourDensity()
           .x((d) => d[0])
           .y((d) => d[1])
           .size([floorPlan.width, floorPlan.height])
-          .bandwidth(50) // Increased bandwidth for smoother transitions
-          .thresholds(8)(heatData); // Fewer thresholds for smoother gradients
+          .bandwidth(30) // Reduced bandwidth for more defined heat areas
+          .thresholds(12)(heatData); // More thresholds for better granularity
 
-        // Color scale for the heat map
+        // Color scale for the heat map - using a more vibrant color scheme
         const colorScale = d3
           .scaleSequential(d3.interpolateYlOrRd)
           .domain([0, d3.max(densityData, (d) => d.value) || 1]);
@@ -318,9 +337,9 @@ function HeatMap() {
           .attr("width", "200%")
           .attr("height", "200%");
 
-        filter.append("feGaussianBlur").attr("stdDeviation", "10");
+        filter.append("feGaussianBlur").attr("stdDeviation", "10"); // Original blur value
 
-        // Draw the heat map contours with increased transparency and blur
+        // Draw the heat map contours with original opacity
         heatGroup
           .selectAll("path")
           .data(densityData)
@@ -328,8 +347,10 @@ function HeatMap() {
           .append("path")
           .attr("d", d3.geoPath())
           .attr("fill", (d) => colorScale(d.value))
-          .attr("opacity", 0.1) // Even more transparent to see the map underneath
+          .attr("opacity", 0.1) // Original opacity
           .attr("filter", "url(#blur)"); // Apply blur filter
+
+        // No additional effects for high-density areas
       }
     }
 
