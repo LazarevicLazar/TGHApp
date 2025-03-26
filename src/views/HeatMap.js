@@ -193,44 +193,145 @@ function HeatMap() {
     // Clear previous visualization
     d3.select(svgRef.current).selectAll("*").remove();
 
+    // Create the main SVG element
     const svg = d3
       .select(svgRef.current)
-      .attr("width", floorPlan.width)
-      .attr("height", floorPlan.height)
+      .attr("width", "100%")
+      .attr("height", "600px") // Fixed height for better control
       .attr("viewBox", `0 0 ${floorPlan.width} ${floorPlan.height}`)
       .attr("preserveAspectRatio", "xMidYMid meet");
 
-    // Draw walls
-    svg
-      .selectAll(".wall")
-      .data(floorPlan.walls)
-      .enter()
-      .append("line")
-      .attr("class", "wall")
-      .attr("x1", (d) => d.x1)
-      .attr("y1", (d) => d.y1)
-      .attr("x2", (d) => d.x2)
-      .attr("y2", (d) => d.y2)
-      .attr("stroke", "#000")
-      .attr("stroke-width", 3);
+    // Create a group for all content that will be zoomed
+    const mainGroup = svg.append("g").attr("class", "main-group");
 
-    // Draw rooms
+    // Add zoom behavior
+    const zoom = d3
+      .zoom()
+      .scaleExtent([0.5, 5]) // Allow zoom from half size to 5x
+      .on("zoom", (event) => {
+        mainGroup.attr("transform", event.transform);
+      });
+
+    svg.call(zoom);
+
+    // Add a border to the SVG for better visibility
     svg
-      .selectAll(".room")
-      .data(floorPlan.rooms)
-      .enter()
       .append("rect")
-      .attr("class", "room")
-      .attr("x", (d) => d.x)
-      .attr("y", (d) => d.y)
-      .attr("width", (d) => d.width)
-      .attr("height", (d) => d.height)
+      .attr("width", floorPlan.width)
+      .attr("height", floorPlan.height)
+      .attr("fill", "none")
       .attr("stroke", "#000")
-      .attr("stroke-width", 2)
-      .attr("fill", "#fff");
+      .attr("stroke-width", 2);
+
+    // Add floor plan image as background
+    mainGroup
+      .append("image")
+      .attr("href", "./floor_plan.png")
+      .attr("width", floorPlan.width)
+      .attr("height", floorPlan.height)
+      .attr("preserveAspectRatio", "xMidYMid meet");
+
+    // Create a group for the heat visualization
+    const heatGroup = mainGroup.append("g").attr("class", "heat-group");
+
+    if (visualizationType === "heatmap" && movements && movements.length > 0) {
+      // Generate heat map data points based on actual movement data
+      const heatData = [];
+      const movementCounts = {};
+
+      // Count movements per location
+      movements.forEach((movement) => {
+        const location = movement.toLocation;
+        if (location) {
+          movementCounts[location] = (movementCounts[location] || 0) + 1;
+        }
+      });
+
+      // Convert movement counts to heat points
+      floorPlan.rooms.forEach((room) => {
+        // Get the center of the room
+        const centerX = room.x + room.width / 2;
+        const centerY = room.y + room.height / 2;
+
+        // Get movement count for this room (if any)
+        const movementCount = movementCounts[room.id] || 0;
+
+        // Scale the heat value based on movement count
+        // More movements = more heat points
+        const heatValue = Math.min(10, Math.max(1, movementCount / 2));
+
+        for (let i = 0; i < heatValue * 5; i++) {
+          // Add some randomness to spread points within the room
+          const offsetX = (Math.random() - 0.5) * room.width * 0.8;
+          const offsetY = (Math.random() - 0.5) * room.height * 0.8;
+
+          heatData.push([centerX + offsetX, centerY + offsetY]);
+        }
+      });
+
+      // Only create heat map if we have data points
+      if (heatData.length > 0) {
+        // Create a density estimation function with increased bandwidth for smoother transitions
+        const densityData = d3
+          .contourDensity()
+          .x((d) => d[0])
+          .y((d) => d[1])
+          .size([floorPlan.width, floorPlan.height])
+          .bandwidth(50) // Increased bandwidth for smoother transitions
+          .thresholds(8)(heatData); // Fewer thresholds for smoother gradients
+
+        // Color scale for the heat map
+        const colorScale = d3
+          .scaleSequential(d3.interpolateYlOrRd)
+          .domain([0, d3.max(densityData, (d) => d.value) || 1]);
+
+        // Create a filter for blur effect
+        const defs = svg.append("defs");
+
+        // Add a blur filter
+        const filter = defs
+          .append("filter")
+          .attr("id", "blur")
+          .attr("x", "-50%")
+          .attr("y", "-50%")
+          .attr("width", "200%")
+          .attr("height", "200%");
+
+        filter.append("feGaussianBlur").attr("stdDeviation", "10");
+
+        // Draw the heat map contours with increased transparency and blur
+        heatGroup
+          .selectAll("path")
+          .data(densityData)
+          .enter()
+          .append("path")
+          .attr("d", d3.geoPath())
+          .attr("fill", (d) => colorScale(d.value))
+          .attr("opacity", 0.1) // Even more transparent to see the map underneath
+          .attr("filter", "url(#blur)"); // Apply blur filter
+      }
+    }
+
+    // We're removing the room squares as requested by the user
+    // If we're not in heatmap mode, we'll show very light outlines
+    if (visualizationType !== "heatmap") {
+      mainGroup
+        .selectAll(".room-outline")
+        .data(floorPlan.rooms)
+        .enter()
+        .append("rect")
+        .attr("class", "room-outline")
+        .attr("x", (d) => d.x)
+        .attr("y", (d) => d.y)
+        .attr("width", (d) => d.width)
+        .attr("height", (d) => d.height)
+        .attr("stroke", "#ccc")
+        .attr("stroke-width", 0.5)
+        .attr("fill", "none");
+    }
 
     // Add room labels
-    svg
+    mainGroup
       .selectAll(".room-label")
       .data(floorPlan.rooms)
       .enter()
@@ -241,40 +342,94 @@ function HeatMap() {
       .attr("text-anchor", "middle")
       .attr("dominant-baseline", "middle")
       .style("font-size", "12px")
+      .attr("pointer-events", "none") // Prevent labels from interfering with mouse events
       .text((d) => d.name);
 
-    if (visualizationType === "heatmap") {
-      // Draw heatmap
-      const colorScale = d3
-        .scaleSequential(d3.interpolateYlOrRd)
-        .domain([0, 1]);
+    // Add zoom controls
+    const zoomControls = svg
+      .append("g")
+      .attr("class", "zoom-controls")
+      .attr("transform", "translate(20, 20)");
 
-      svg
-        .selectAll(".heatmap")
-        .data(floorPlan.heatmap)
-        .enter()
-        .append("rect")
-        .attr("class", "heatmap")
-        .attr("x", (d) => {
-          const room = floorPlan.rooms.find((r) => r.id === d.location);
-          return room ? room.x : 0;
-        })
-        .attr("y", (d) => {
-          const room = floorPlan.rooms.find((r) => r.id === d.location);
-          return room ? room.y : 0;
-        })
-        .attr("width", (d) => {
-          const room = floorPlan.rooms.find((r) => r.id === d.location);
-          return room ? room.width : 0;
-        })
-        .attr("height", (d) => {
-          const room = floorPlan.rooms.find((r) => r.id === d.location);
-          return room ? room.height : 0;
-        })
-        .attr("fill", (d) => colorScale(d.intensity))
-        .attr("opacity", 0.7)
-        .attr("stroke", "none");
-    } else if (visualizationType === "movement") {
+    // Zoom in button
+    zoomControls
+      .append("rect")
+      .attr("x", 0)
+      .attr("y", 0)
+      .attr("width", 30)
+      .attr("height", 30)
+      .attr("fill", "#f0f0f0")
+      .attr("stroke", "#000")
+      .attr("rx", 5)
+      .attr("ry", 5)
+      .attr("cursor", "pointer")
+      .on("click", () => {
+        svg.transition().duration(300).call(zoom.scaleBy, 1.3);
+      });
+
+    zoomControls
+      .append("text")
+      .attr("x", 15)
+      .attr("y", 20)
+      .attr("text-anchor", "middle")
+      .attr("dominant-baseline", "middle")
+      .style("font-size", "20px")
+      .attr("pointer-events", "none")
+      .text("+");
+
+    // Zoom out button
+    zoomControls
+      .append("rect")
+      .attr("x", 0)
+      .attr("y", 40)
+      .attr("width", 30)
+      .attr("height", 30)
+      .attr("fill", "#f0f0f0")
+      .attr("stroke", "#000")
+      .attr("rx", 5)
+      .attr("ry", 5)
+      .attr("cursor", "pointer")
+      .on("click", () => {
+        svg.transition().duration(300).call(zoom.scaleBy, 0.7);
+      });
+
+    zoomControls
+      .append("text")
+      .attr("x", 15)
+      .attr("y", 60)
+      .attr("text-anchor", "middle")
+      .attr("dominant-baseline", "middle")
+      .style("font-size", "20px")
+      .attr("pointer-events", "none")
+      .text("−");
+
+    // Reset zoom button
+    zoomControls
+      .append("rect")
+      .attr("x", 0)
+      .attr("y", 80)
+      .attr("width", 30)
+      .attr("height", 30)
+      .attr("fill", "#f0f0f0")
+      .attr("stroke", "#000")
+      .attr("rx", 5)
+      .attr("ry", 5)
+      .attr("cursor", "pointer")
+      .on("click", () => {
+        svg.transition().duration(300).call(zoom.transform, d3.zoomIdentity);
+      });
+
+    zoomControls
+      .append("text")
+      .attr("x", 15)
+      .attr("y", 100)
+      .attr("text-anchor", "middle")
+      .attr("dominant-baseline", "middle")
+      .style("font-size", "10px")
+      .attr("pointer-events", "none")
+      .text("Reset");
+
+    if (visualizationType === "movement") {
       // Filter movements based on selected device
       const filteredMovements =
         selectedDevice === "All"

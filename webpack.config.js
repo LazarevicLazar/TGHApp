@@ -55,6 +55,7 @@ module.exports = {
           to: "floor_plan_progress.json",
         },
         { from: "public/graph_data.json", to: "graph_data.json" },
+        { from: "public/floor_plan.png", to: "floor_plan.png" },
       ],
     }),
   ],
