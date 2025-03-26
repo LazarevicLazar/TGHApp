@@ -223,13 +223,34 @@ function HeatMap() {
       .attr("stroke", "#000")
       .attr("stroke-width", 2);
 
-    // Add floor plan image as background
+    // Add floor plan image as background with adjusted aspect ratio to match room overlay
+    // First, calculate the bounds of the rooms to determine the correct scaling
+    const roomBounds = {
+      minX: d3.min(floorPlan.rooms, (d) => d.x),
+      minY: d3.min(floorPlan.rooms, (d) => d.y),
+      maxX: d3.max(floorPlan.rooms, (d) => d.x + d.width),
+      maxY: d3.max(floorPlan.rooms, (d) => d.y + d.height),
+    };
+
+    // Create a clip path to ensure the image doesn't overflow
+    const defs = svg.append("defs");
+    defs
+      .append("clipPath")
+      .attr("id", "floor-plan-clip")
+      .append("rect")
+      .attr("x", 0)
+      .attr("y", 0)
+      .attr("width", floorPlan.width)
+      .attr("height", floorPlan.height);
+
+    // Add floor plan image as background with precise positioning
     mainGroup
       .append("image")
       .attr("href", "./floor_plan.png")
       .attr("width", floorPlan.width)
       .attr("height", floorPlan.height)
-      .attr("preserveAspectRatio", "xMidYMid meet");
+      .attr("preserveAspectRatio", "none") // Use 'none' to stretch the image to match exactly
+      .attr("clip-path", "url(#floor-plan-clip)");
 
     // Create a group for the heat visualization
     const heatGroup = mainGroup.append("g").attr("class", "heat-group");
