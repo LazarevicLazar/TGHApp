@@ -15,6 +15,7 @@ import {
 } from "@mui/material";
 import * as d3 from "d3";
 import { useDataContext } from "../context/DataContext";
+import optimizationService from "../services/OptimizationService";
 
 function HeatMap() {
   const { devices, locations, movements, loading } = useDataContext();
@@ -37,11 +38,18 @@ function HeatMap() {
 
         try {
           // Load floor plan data from the provided JSON files
-          const response = await fetch("/floor_plan_progress.json");
-          if (response.ok) {
-            const data = await response.json();
-            roomsData = data.rooms || {};
-            wallsData = data.walls || [];
+          const floorPlanResponse = await fetch("./floor_plan_progress.json");
+          const graphDataResponse = await fetch("./graph_data.json");
+
+          if (floorPlanResponse.ok && graphDataResponse.ok) {
+            const floorPlanData = await floorPlanResponse.json();
+            const graphData = await graphDataResponse.json();
+
+            roomsData = floorPlanData.rooms || {};
+            wallsData = floorPlanData.walls || [];
+
+            // Initialize the optimization service with the graph data
+            optimizationService.initialize(graphData, floorPlanData);
           }
         } catch (error) {
           console.error("Error loading floor plan data:", error);
