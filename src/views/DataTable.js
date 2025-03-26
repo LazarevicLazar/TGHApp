@@ -21,7 +21,12 @@ import {
   FileDownload as FileDownloadIcon,
 } from "@mui/icons-material";
 import { useDataContext } from "../context/DataContext";
-import { formatDate, downloadCSV, convertToCSV } from "../utils/helpers";
+import {
+  formatDate,
+  downloadCSV,
+  convertToCSV,
+  getStatusColor,
+} from "../utils/helpers";
 
 function DataTable() {
   const { movements, loading } = useDataContext();
@@ -48,13 +53,27 @@ function DataTable() {
   const getRowValue = (row, field) => {
     // Map lowercase field names to their uppercase equivalents
     const fieldMap = {
-      deviceId: ["deviceId", "device", "Device"],
-      fromLocation: ["fromLocation", "from", "From"],
-      toLocation: ["toLocation", "to", "To", "location", "Location"],
+      deviceId: ["deviceId", "device", "Device", "deviceid", "devId", "devid"],
+      fromLocation: ["fromLocation", "from", "From", "fromlocation", "fromLoc"],
+      toLocation: [
+        "toLocation",
+        "to",
+        "To",
+        "location",
+        "Location",
+        "tolocation",
+      ],
       status: ["status", "Status"],
-      timeIn: ["timeIn", "in", "In", "time_in"],
-      timeOut: ["timeOut", "out", "Out", "time_out"],
-      distanceTraveled: ["distanceTraveled", "distance"],
+      timeIn: ["timeIn", "in", "In", "time_in", "timeIn", "timein", "timeIN"],
+      timeOut: ["timeOut", "out", "Out", "time_out", "timeout", "timeOUT"],
+      distanceTraveled: [
+        "distanceTraveled",
+        "distance",
+        "distanceTraveled",
+        "distancetraveled",
+        "distanceTravel",
+        "distanceT",
+      ],
     };
 
     // If the field is in our map, try all possible field names
@@ -86,6 +105,7 @@ function DataTable() {
   };
 
   const handleExportCSV = () => {
+    // Use headers that match the example format
     const headers = [
       "deviceId",
       "fromLocation",
@@ -95,15 +115,28 @@ function DataTable() {
       "timeOut",
       "distanceTraveled",
     ];
-    const csvData = filteredData.map((row) => ({
-      deviceId: getRowValue(row, "deviceId"),
-      fromLocation: getRowValue(row, "fromLocation"),
-      toLocation: getRowValue(row, "toLocation"),
-      status: getRowValue(row, "status"),
-      timeIn: getRowValue(row, "timeIn"),
-      timeOut: getRowValue(row, "timeOut"),
-      distanceTraveled: getRowValue(row, "distanceTraveled"),
-    }));
+
+    // Map the data to match the headers
+    const csvData = filteredData.map((row) => {
+      // Extract device type and ID
+      const deviceId = getRowValue(row, "deviceId") || "";
+
+      return {
+        deviceId: deviceId,
+        fromLocation: getRowValue(row, "fromLocation") || "Unknown",
+        toLocation:
+          getRowValue(row, "toLocation") ||
+          getRowValue(row, "location") ||
+          "Unknown",
+        status: getRowValue(row, "status") || "Unknown",
+        timeIn: getRowValue(row, "timeIn") || getRowValue(row, "in") || "",
+        timeOut: getRowValue(row, "timeOut") || getRowValue(row, "out") || "",
+        distanceTraveled:
+          getRowValue(row, "distanceTraveled") ||
+          getRowValue(row, "distance") ||
+          "0",
+      };
+    });
 
     const csvContent = convertToCSV(csvData, headers);
     downloadCSV(csvContent, "equipment_movements.csv");
@@ -128,24 +161,34 @@ function DataTable() {
     return 0;
   };
 
-  const filteredData = tableData.filter((row) => {
-    // Check all possible field names
-    const fieldsToCheck = [
-      getRowValue(row, "deviceId"),
-      getRowValue(row, "fromLocation"),
-      getRowValue(row, "toLocation"),
-      getRowValue(row, "status"),
-      getRowValue(row, "timeIn"),
-      getRowValue(row, "timeOut"),
-    ];
+  // Make sure tableData is an array before filtering
+  const filteredData = Array.isArray(tableData)
+    ? tableData.filter((row) => {
+        if (!row) return false;
 
-    return fieldsToCheck.some(
-      (value) =>
-        value !== null &&
-        value !== undefined &&
-        value.toString().toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  });
+        try {
+          // Check all possible field names
+          const fieldsToCheck = [
+            getRowValue(row, "deviceId"),
+            getRowValue(row, "fromLocation"),
+            getRowValue(row, "toLocation"),
+            getRowValue(row, "status"),
+            getRowValue(row, "timeIn"),
+            getRowValue(row, "timeOut"),
+          ];
+
+          return fieldsToCheck.some(
+            (value) =>
+              value !== null &&
+              value !== undefined &&
+              String(value).toLowerCase().includes(searchTerm.toLowerCase())
+          );
+        } catch (error) {
+          console.error("Error filtering row:", error, row);
+          return false;
+        }
+      })
+    : [];
 
   const sortedData = filteredData.sort(getComparator(order, orderBy));
 
@@ -206,7 +249,7 @@ function DataTable() {
                   direction={orderBy === "deviceId" ? order : "asc"}
                   onClick={() => handleRequestSort("deviceId")}
                 >
-                  Device
+                  Device ID
                 </TableSortLabel>
               </TableCell>
               <TableCell>
@@ -260,30 +303,94 @@ function DataTable() {
                   direction={orderBy === "distanceTraveled" ? order : "asc"}
                   onClick={() => handleRequestSort("distanceTraveled")}
                 >
-                  Distance (m)
+                  Distance
                 </TableSortLabel>
               </TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {paginatedData.length > 0 ? (
-              paginatedData.map((row) => (
-                <TableRow key={row._id} hover>
-                  <TableCell>{getRowValue(row, "deviceId")}</TableCell>
-                  <TableCell>{getRowValue(row, "fromLocation")}</TableCell>
-                  <TableCell>{getRowValue(row, "toLocation")}</TableCell>
-                  <TableCell>{getRowValue(row, "status")}</TableCell>
-                  <TableCell>
-                    {formatDate(getRowValue(row, "timeIn"))}
-                  </TableCell>
-                  <TableCell>
-                    {formatDate(getRowValue(row, "timeOut"))}
-                  </TableCell>
-                  <TableCell>
-                    {getRowValue(row, "distanceTraveled") || 0}
-                  </TableCell>
-                </TableRow>
-              ))
+              paginatedData.map((row, index) => {
+                if (!row) return null;
+
+                try {
+                  // Extract device type and ID
+                  const deviceId = getRowValue(row, "deviceId") || "";
+                  let deviceType = "Unknown";
+                  let deviceNumber = deviceId;
+
+                  // Try to parse device type from the device ID
+                  if (deviceId && typeof deviceId === "string") {
+                    const parts = deviceId.split(/[-_\s]/);
+                    if (parts.length > 1) {
+                      deviceType = parts[0];
+                      deviceNumber = parts.slice(1).join("-");
+                    } else if (deviceId.match(/^[a-zA-Z]+\d+$/)) {
+                      // Handle case like "Defibrillator123"
+                      const match = deviceId.match(/^([a-zA-Z]+)(\d+)$/);
+                      if (match) {
+                        deviceType = match[1];
+                        deviceNumber = match[2];
+                      }
+                    }
+                  }
+
+                  return (
+                    <TableRow key={row._id || index} hover>
+                      <TableCell>
+                        <Box sx={{ display: "flex", flexDirection: "column" }}>
+                          <Typography variant="body2" fontWeight="bold">
+                            {deviceType}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {deviceNumber}
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        {getRowValue(row, "fromLocation") || "Unknown"}
+                      </TableCell>
+                      <TableCell>
+                        {getRowValue(row, "toLocation") ||
+                          getRowValue(row, "location") ||
+                          "Unknown"}
+                      </TableCell>
+                      <TableCell>
+                        <Box
+                          sx={{
+                            bgcolor: getStatusColor(getRowValue(row, "status")),
+                            color: "white",
+                            px: 1,
+                            py: 0.5,
+                            borderRadius: 1,
+                            display: "inline-block",
+                          }}
+                        >
+                          {getRowValue(row, "status") || "Unknown"}
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        {formatDate(
+                          getRowValue(row, "timeIn") || getRowValue(row, "in")
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {formatDate(
+                          getRowValue(row, "timeOut") || getRowValue(row, "out")
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {getRowValue(row, "distanceTraveled") ||
+                          getRowValue(row, "distance") ||
+                          "0"}
+                      </TableCell>
+                    </TableRow>
+                  );
+                } catch (error) {
+                  console.error("Error rendering row:", error, row);
+                  return null;
+                }
+              })
             ) : (
               <TableRow>
                 <TableCell colSpan={7} align="center">

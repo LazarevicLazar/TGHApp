@@ -157,68 +157,184 @@ ipcMain.handle("import-csv-data", async (event, csvData) => {
 async function processImportedData(records) {
   const processedRecords = [];
 
-  for (const record of records) {
-    // Extract device type from device name
-    const deviceId = record.device || record.Device || "";
-    const deviceType = deviceId.split("-")[0] || "Unknown";
+  try {
+    // Load graph data for distance calculations
+    let graphData = null;
+    try {
+      const graphDataPath = path.join(__dirname, "../public/graph_data.json");
+      const graphDataContent = fs.readFileSync(graphDataPath, "utf8");
+      graphData = JSON.parse(graphDataContent);
+      console.log("Graph data loaded successfully");
+    } catch (error) {
+      console.error("Error loading graph data:", error);
+      // Continue without graph data
+    }
 
-    // Create or update device
-    const device = {
-      deviceId,
-      deviceType,
-      status: record.status || record.Status || "Unknown",
-      lastMaintenance: null,
-      totalUsageHours: 0,
-      currentLocation: record.location || record.Location || "Unknown",
-      metadata: {},
-    };
+    // Group records by device ID
+    const deviceRecords = {};
 
-    // Upsert device (insert if not exists, update if exists)
-    await db.devices.update(
-      { deviceId: device.deviceId },
-      { $set: device },
-      { upsert: true }
-    );
+    for (const record of records) {
+      const deviceId = record.device || record.Device || "";
+      if (!deviceId) continue;
 
-    // Create or update location
-    const locationId = record.location || record.Location || "Unknown";
-    const location = {
-      locationId,
-      name: locationId,
-      coordinates: [0, 0], // Will be updated from floor plan data
-      metadata: {},
-    };
+      if (!deviceRecords[deviceId]) {
+        deviceRecords[deviceId] = [];
+      }
 
-    // Upsert location
-    await db.locations.update(
-      { locationId: location.locationId },
-      { $set: location },
-      { upsert: true }
-    );
+      deviceRecords[deviceId].push(record);
+    }
 
-    // Create movement record
-    const movement = {
-      deviceId,
-      fromLocation: record.fromLocation || "Unknown",
-      toLocation: locationId,
-      timeIn: record.in || record.In || new Date().toISOString(),
-      timeOut: record.out || record.Out || new Date().toISOString(),
-      status: record.status || record.Status || "Unknown",
-      distanceTraveled: 0, // Will be calculated from graph data
-      createdAt: new Date(),
-    };
+    // Process each device's records
+    for (const [deviceId, deviceRecs] of Object.entries(deviceRecords)) {
+      const deviceType = deviceId.split("-")[0] || "Unknown";
 
-    // Insert movement
-    await db.movements.insert(movement);
+      // Count how many records have "In Use" status
+      const inUseCount = deviceRecs.filter((rec) =>
+        (rec.status || rec.Status || "").toLowerCase().includes("in use")
+      ).length;
 
-    processedRecords.push({
-      ...record,
-      deviceType,
-      processed: true,
-    });
+      // Calculate the percentage of time the device is in use
+      const inUsePercentage = Math.round(
+        (inUseCount / deviceRecs.length) * 100
+      );
+
+      // Get the latest status
+      const latestStatus =
+        deviceRecs[deviceRecs.length - 1]?.status ||
+        deviceRecs[deviceRecs.length - 1]?.Status ||
+        "Unknown";
+
+      // Create or update device
+      const device = {
+        deviceId,
+        deviceType,
+        status: latestStatus,
+        lastMaintenance: null,
+        totalUsageHours: 0,
+        currentLocation:
+          deviceRecs[deviceRecs.length - 1]?.location ||
+          deviceRecs[deviceRecs.length - 1]?.Location ||
+          "Unknown",
+        inUseCount,
+        totalCount: deviceRecs.length,
+        usagePercentage: inUsePercentage,
+        metadata: {},
+      };
+
+      // Upsert device
+      await db.devices.update(
+        { deviceId: device.deviceId },
+        { $set: device },
+        { upsert: true }
+      );
+
+      console.log(
+        `Updated device: ${deviceId} with usage: ${inUsePercentage}%`
+      );
+
+      // Sort records by time (if available)
+      deviceRecs.sort((a, b) => {
+        const timeA = a.in || a.In || a.timeIn || "";
+        const timeB = b.in || b.In || b.timeIn || "";
+        return timeA.localeCompare(timeB);
+      });
+
+      // Create movement records by pairing consecutive locations
+      for (let i = 0; i < deviceRecs.length - 1; i++) {
+        const currentRecord = deviceRecs[i];
+        const nextRecord = deviceRecs[i + 1];
+
+        // Get locations
+        const fromLocation =
+          currentRecord.location || currentRecord.Location || "Unknown";
+        const toLocation =
+          nextRecord.location || nextRecord.Location || "Unknown";
+
+        // Skip movements where the device moves from the same room to the same room
+        if (fromLocation === toLocation) {
+          console.log(
+            `Skipping movement for ${deviceId} from ${fromLocation} to ${toLocation} (same location)`
+          );
+          continue;
+        }
+
+        // Ensure both locations exist in the database
+        for (const loc of [fromLocation, toLocation]) {
+          if (loc !== "Unknown") {
+            const location = {
+              locationId: loc,
+              name: loc,
+              coordinates: [0, 0], // Will be updated from floor plan data
+              metadata: {},
+            };
+
+            await db.locations.update(
+              { locationId: location.locationId },
+              { $set: location },
+              { upsert: true }
+            );
+          }
+        }
+
+        // Calculate distance if graph data is available
+        let distance = 0;
+        if (
+          graphData &&
+          fromLocation !== "Unknown" &&
+          toLocation !== "Unknown"
+        ) {
+          // Look for direct edge
+          const directEdge = graphData.edges.find(
+            (edge) =>
+              (edge[0] === fromLocation && edge[1] === toLocation) ||
+              (edge[0] === toLocation && edge[1] === fromLocation)
+          );
+
+          if (directEdge) {
+            // Round distance to 1 decimal point
+            distance = Math.round(directEdge[2] * 10) / 10;
+          }
+        }
+
+        // Create movement record
+        const movement = {
+          deviceId,
+          fromLocation,
+          toLocation,
+          timeIn:
+            currentRecord.in ||
+            currentRecord.In ||
+            currentRecord.timeIn ||
+            new Date().toISOString(),
+          timeOut:
+            nextRecord.in ||
+            nextRecord.In ||
+            nextRecord.timeIn ||
+            new Date().toISOString(),
+          status: currentRecord.status || currentRecord.Status || "Unknown",
+          distanceTraveled: distance,
+          createdAt: new Date(),
+        };
+
+        // Insert movement
+        await db.movements.insert(movement);
+
+        processedRecords.push({
+          ...currentRecord,
+          deviceType,
+          fromLocation,
+          toLocation,
+          distanceTraveled: distance,
+          processed: true,
+        });
+      }
+    }
+
+    return processedRecords;
+  } catch (error) {
+    console.error("Error processing imported data:", error);
+    throw error;
   }
-
-  return processedRecords;
 }
 
 // Get all devices

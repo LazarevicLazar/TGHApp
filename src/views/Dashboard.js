@@ -39,51 +39,134 @@ function Dashboard() {
   const [displayedRecommendations, setDisplayedRecommendations] = useState([]);
 
   useEffect(() => {
-    if (devices && devices.length > 0) {
-      // Process data to generate equipment stats
-      const deviceTypes = {};
-      devices.forEach((device) => {
-        const deviceType = device.deviceType || "Unknown";
+    // Check if we have any data to process
+    const hasDevices = devices && devices.length > 0;
+    const hasMovements = movements && movements.length > 0;
 
-        if (!deviceTypes[deviceType]) {
-          deviceTypes[deviceType] = { name: deviceType, count: 0, usage: 0 };
-        }
-        deviceTypes[deviceType].count++;
+    if (hasDevices || hasMovements) {
+      // Process data to generate equipment stats for individual devices
+      const deviceMap = {};
 
-        // Calculate usage based on status
-        if (device.status && device.status.toLowerCase().includes("in use")) {
-          deviceTypes[deviceType].usage += 1;
+      // First, process each device individually
+      if (devices && devices.length > 0) {
+        devices.forEach((device) => {
+          const deviceId = device.deviceId || "Unknown";
+          const deviceType = device.deviceType || "Unknown";
+          const displayName = deviceId; // Use deviceId as the display name
+
+          if (!deviceMap[deviceId]) {
+            deviceMap[deviceId] = {
+              name: displayName,
+              deviceType: deviceType,
+              count: 1,
+              usage: 0,
+              inUseCount: 0,
+            };
+          }
+
+          // Use the usagePercentage field if available, otherwise calculate based on status
+          if (device.usagePercentage !== undefined) {
+            deviceMap[deviceId].usage = device.usagePercentage;
+          } else if (
+            device.status &&
+            device.status.toLowerCase().includes("in use")
+          ) {
+            deviceMap[deviceId].inUseCount += 1;
+          }
+        });
+      }
+
+      // If we don't have device data, extract it from movements
+      if (
+        (!devices || devices.length === 0) &&
+        movements &&
+        movements.length > 0
+      ) {
+        // Create a map to track unique devices
+        const uniqueDevices = new Map();
+
+        movements.forEach((movement) => {
+          const deviceId = movement.deviceId || "";
+          const deviceType = deviceId.split("-")[0] || "Unknown";
+          const status = movement.status || "Unknown";
+
+          // Only process each device once
+          if (!uniqueDevices.has(deviceId)) {
+            uniqueDevices.set(deviceId, { deviceType, status });
+
+            if (!deviceMap[deviceId]) {
+              deviceMap[deviceId] = {
+                name: deviceId,
+                deviceType: deviceType,
+                count: 1,
+                usage: 0,
+                inUseCount: 0,
+              };
+            }
+
+            // Use the usagePercentage field if available, otherwise calculate based on status
+            if (movement.usagePercentage !== undefined) {
+              deviceMap[deviceId].usage = movement.usagePercentage;
+            } else if (status && status.toLowerCase().includes("in use")) {
+              deviceMap[deviceId].inUseCount += 1;
+            }
+          }
+        });
+      }
+
+      // Convert to percentage if not already set
+      Object.values(deviceMap).forEach((device) => {
+        // Only calculate if usage is not already set
+        if (device.usage === 0 && device.count > 0) {
+          device.usage = Math.round((device.inUseCount / device.count) * 100);
         }
       });
 
-      // Convert to percentage
-      Object.values(deviceTypes).forEach((type) => {
-        type.usage = Math.round((type.usage / type.count) * 100);
-      });
+      // Convert to array and sort by device type and then by name
+      const equipmentStatsData = Object.values(deviceMap)
+        .filter((device) => device.count > 0) // Only include devices with count
+        .sort((a, b) => {
+          // First sort by device type
+          if (a.deviceType !== b.deviceType) {
+            return a.deviceType.localeCompare(b.deviceType);
+          }
+          // Then sort by name
+          return a.name.localeCompare(b.name);
+        });
 
-      // Convert to array and sort
-      const equipmentStatsData = Object.values(deviceTypes).sort(
-        (a, b) => b.count - a.count
+      // Use the calculated data if we have any, otherwise use empty array
+      setEquipmentStats(
+        equipmentStatsData.length > 0 ? equipmentStatsData : []
       );
-      setEquipmentStats(equipmentStatsData);
 
       // Process data to generate location stats
-      const locations = {};
-      movements.forEach((movement) => {
-        const location = movement.toLocation || "Unknown";
+      if (movements && movements.length > 0) {
+        const locations = {};
+        movements.forEach((movement) => {
+          const location = movement.toLocation || "Unknown";
 
-        if (!locations[location]) {
-          locations[location] = { name: location, value: 0 };
-        }
-        locations[location].value++;
-      });
+          if (!locations[location]) {
+            locations[location] = { name: location, value: 0 };
+          }
+          locations[location].value++;
+        });
 
-      // Convert to array and sort
-      const locationStatsData = Object.values(locations)
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 5); // Take top 5 locations
+        // Convert to array and sort
+        const locationStatsData = Object.values(locations)
+          .filter((loc) => loc.name !== "Unknown") // Filter out Unknown locations
+          .sort((a, b) => b.value - a.value)
+          .slice(0, 5); // Take top 5 locations
 
-      setLocationStats(locationStatsData);
+        setLocationStats(
+          locationStatsData.length > 0 ? locationStatsData : emptyDepartmentData
+        );
+      } else {
+        setLocationStats(emptyDepartmentData);
+      }
+    } else {
+      // No data, use sample data
+      setEquipmentStats(emptyEquipmentData);
+      setLocationStats(emptyDepartmentData);
     }
 
     // Set recommendations

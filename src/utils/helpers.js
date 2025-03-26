@@ -10,8 +10,17 @@
 export const formatDate = (dateString) => {
   if (!dateString) return "";
 
+  // If the date is represented as "#######", just return it as is
+  if (dateString === "#######" || dateString.includes("#")) {
+    return dateString;
+  }
+
   try {
     const date = new Date(dateString);
+    // Check if the date is valid
+    if (isNaN(date.getTime())) {
+      return dateString;
+    }
     return date.toLocaleString("en-US", {
       year: "numeric",
       month: "short",
