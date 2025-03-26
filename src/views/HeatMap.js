@@ -472,6 +472,11 @@ function HeatMap() {
       .text("Reset");
 
     if (visualizationType === "movement") {
+      // Create a group for the movement visualization
+      const movementGroup = mainGroup
+        .append("g")
+        .attr("class", "movement-group");
+
       // Filter movements based on selected device
       const filteredMovements =
         selectedDevice === "All"
@@ -495,7 +500,8 @@ function HeatMap() {
           // Line width based on movement count
           const lineWidth = Math.max(1, Math.min(10, movement.count / 2));
 
-          svg
+          // Create a path for the movement line with a gradient
+          const movementPath = movementGroup
             .append("line")
             .attr("x1", fromX)
             .attr("y1", fromY)
@@ -509,7 +515,7 @@ function HeatMap() {
           const angle = Math.atan2(toY - fromY, toX - fromX);
           const arrowSize = lineWidth * 2;
 
-          svg
+          movementGroup
             .append("polygon")
             .attr(
               "points",
