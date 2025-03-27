@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Box,
   AppBar,
@@ -11,6 +11,18 @@ import {
   ListItemText,
   Divider,
   IconButton,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
 } from "@mui/material";
 import {
   Dashboard as DashboardIcon,
@@ -19,7 +31,10 @@ import {
   CloudUpload as CloudUploadIcon,
   Menu as MenuIcon,
   Analytics as AnalyticsIcon,
+  Warning as WarningIcon,
+  LocationOn as LocationOnIcon,
 } from "@mui/icons-material";
+import { useDataContext } from "./context/DataContext";
 
 // Import views
 import Dashboard from "./views/Dashboard";
@@ -60,8 +75,50 @@ const views = [
 const drawerWidth = 240;
 
 function App() {
+  const { movements } = useDataContext();
   const [currentView, setCurrentView] = useState("dashboard");
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [emergencyDialogOpen, setEmergencyDialogOpen] = useState(false);
+  const [deviceLocations, setDeviceLocations] = useState([]);
+
+  // Process device locations when movements change
+  useEffect(() => {
+    if (movements && movements.length > 0) {
+      // Create a map to track the latest movement for each device
+      const deviceMap = new Map();
+
+      // Process all movements to find the latest one for each device
+      movements.forEach((movement) => {
+        const deviceId = movement.deviceId;
+        if (!deviceId) return;
+
+        // Get existing entry or create a new one
+        const existing = deviceMap.get(deviceId);
+
+        // Check if this movement is newer than the existing one
+        if (
+          !existing ||
+          (movement.timeIn &&
+            existing.timeIn &&
+            new Date(movement.timeIn) > new Date(existing.timeIn))
+        ) {
+          deviceMap.set(deviceId, {
+            deviceId,
+            location: movement.toLocation || "Unknown",
+            timeIn: movement.timeIn,
+            status: movement.status || "Unknown",
+          });
+        }
+      });
+
+      // Convert map to array and sort by device ID
+      const locations = Array.from(deviceMap.values()).sort((a, b) =>
+        a.deviceId.localeCompare(b.deviceId)
+      );
+
+      setDeviceLocations(locations);
+    }
+  }, [movements]);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -72,12 +129,20 @@ function App() {
     setMobileOpen(false);
   };
 
+  const handleEmergencyClick = () => {
+    setEmergencyDialogOpen(true);
+  };
+
+  const handleCloseEmergencyDialog = () => {
+    setEmergencyDialogOpen(false);
+  };
+
   // Get current view component
   const CurrentViewComponent =
     views.find((view) => view.id === currentView)?.component || Dashboard;
 
   const drawer = (
-    <div>
+    <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <Toolbar>
         <Typography variant="h6" noWrap component="div">
           RTLS Equipment Tracker
@@ -97,7 +162,29 @@ function App() {
           </ListItem>
         ))}
       </List>
-    </div>
+      <Box sx={{ flexGrow: 1 }} />
+      <Divider />
+      <Box sx={{ p: 2 }}>
+        <Button
+          variant="contained"
+          color="error"
+          fullWidth
+          startIcon={<WarningIcon />}
+          onClick={handleEmergencyClick}
+          sx={{
+            py: 1.5,
+            fontWeight: "bold",
+            boxShadow: 3,
+            "&:hover": {
+              boxShadow: 5,
+              transform: "scale(1.02)",
+            },
+          }}
+        >
+          EMERGENCY
+        </Button>
+      </Box>
+    </Box>
   );
 
   return (
@@ -178,6 +265,101 @@ function App() {
       >
         <CurrentViewComponent />
       </Box>
+
+      {/* Emergency Dialog */}
+      <Dialog
+        open={emergencyDialogOpen}
+        onClose={handleCloseEmergencyDialog}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle
+          sx={{
+            bgcolor: "error.main",
+            color: "white",
+            display: "flex",
+            alignItems: "center",
+          }}
+        >
+          <WarningIcon sx={{ mr: 1 }} />
+          Emergency: Last Known Device Locations
+        </DialogTitle>
+        <DialogContent dividers>
+          {deviceLocations.length > 0 ? (
+            <TableContainer component={Paper}>
+              <Table aria-label="device locations table">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Device ID</TableCell>
+                    <TableCell>Last Location</TableCell>
+                    <TableCell>Last Seen</TableCell>
+                    <TableCell>Status</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {deviceLocations.map((device) => (
+                    <TableRow key={device.deviceId}>
+                      <TableCell component="th" scope="row">
+                        {device.deviceId}
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: "flex", alignItems: "center" }}>
+                          <LocationOnIcon
+                            sx={{ mr: 1, color: "primary.main" }}
+                          />
+                          {device.location}
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        {device.timeIn
+                          ? new Date(device.timeIn).toLocaleString()
+                          : "Unknown"}
+                      </TableCell>
+                      <TableCell>
+                        <Box
+                          sx={{
+                            display: "inline-block",
+                            px: 1,
+                            py: 0.5,
+                            borderRadius: 1,
+                            bgcolor: device.status
+                              .toLowerCase()
+                              .includes("in use")
+                              ? "success.light"
+                              : "info.light",
+                            color: device.status
+                              .toLowerCase()
+                              .includes("in use")
+                              ? "success.dark"
+                              : "info.dark",
+                          }}
+                        >
+                          {device.status}
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          ) : (
+            <Box sx={{ textAlign: "center", py: 4 }}>
+              <Typography variant="body1" color="text.secondary">
+                No device location data available.
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={handleCloseEmergencyDialog}
+            color="primary"
+            variant="contained"
+          >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

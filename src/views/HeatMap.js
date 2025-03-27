@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Box,
   Card,
@@ -180,24 +180,18 @@ function HeatMap() {
     }
   }, [devices]);
 
-  // Render visualization when data changes
-  useEffect(() => {
-    if (!floorPlan || !svgRef.current) return;
-
-    renderVisualization();
-  }, [floorPlan, visualizationType, selectedDevice]);
-
-  const renderVisualization = () => {
+  // Memoize the renderVisualization function to prevent unnecessary re-renders
+  const renderVisualization = useCallback(() => {
     if (!svgRef.current || !floorPlan) return;
 
     // Clear previous visualization
     d3.select(svgRef.current).selectAll("*").remove();
 
-    // Create the main SVG element
+    // Create the main SVG element with responsive dimensions
     const svg = d3
       .select(svgRef.current)
       .attr("width", "100%")
-      .attr("height", "600px") // Fixed height for better control
+      .attr("height", "100%") // Make height responsive
       .attr("viewBox", `0 0 ${floorPlan.width} ${floorPlan.height}`)
       .attr("preserveAspectRatio", "xMidYMid meet");
 
@@ -214,8 +208,8 @@ function HeatMap() {
 
     svg.call(zoom);
 
-    // Add a border to the SVG for better visibility
-    svg
+    // Add a border to the mainGroup so it scales with zooming
+    mainGroup
       .append("rect")
       .attr("width", floorPlan.width)
       .attr("height", floorPlan.height)
@@ -347,7 +341,7 @@ function HeatMap() {
           .append("path")
           .attr("d", d3.geoPath())
           .attr("fill", (d) => colorScale(d.value))
-          .attr("opacity", 0.1) // Original opacity
+          .attr("opacity", 0.2) // Original opacity
           .attr("filter", "url(#blur)"); // Apply blur filter
 
         // No additional effects for high-density areas
@@ -387,11 +381,12 @@ function HeatMap() {
       .attr("pointer-events", "none") // Prevent labels from interfering with mouse events
       .text((d) => d.name);
 
-    // Add zoom controls
+    // Add zoom controls - append to svg (not mainGroup) to keep them fixed during zoom
     const zoomControls = svg
       .append("g")
       .attr("class", "zoom-controls")
-      .attr("transform", "translate(20, 20)");
+      .attr("transform", "translate(20, 20)")
+      .style("pointer-events", "all"); // Ensure controls remain clickable
 
     // Zoom in button
     zoomControls
@@ -531,7 +526,40 @@ function HeatMap() {
         }
       });
     }
-  };
+  }, [floorPlan, visualizationType, selectedDevice, movements]);
+
+  // Render visualization when data changes
+  useEffect(() => {
+    if (!floorPlan || !svgRef.current) return;
+
+    renderVisualization();
+  }, [floorPlan, visualizationType, selectedDevice, renderVisualization]);
+
+  // Add window resize handler to ensure the SVG scales properly
+  useEffect(() => {
+    if (!floorPlan || !svgRef.current) return;
+
+    const handleResize = () => {
+      // Debounce the resize event to avoid too many re-renders
+      if (window.resizeTimeout) {
+        clearTimeout(window.resizeTimeout);
+      }
+
+      window.resizeTimeout = setTimeout(() => {
+        renderVisualization();
+      }, 250);
+    };
+
+    window.addEventListener("resize", handleResize);
+
+    // Clean up event listener on component unmount
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      if (window.resizeTimeout) {
+        clearTimeout(window.resizeTimeout);
+      }
+    };
+  }, [renderVisualization]);
 
   const handleVisualizationChange = (event) => {
     setVisualizationType(event.target.value);
@@ -601,9 +629,20 @@ function HeatMap() {
             />
             <CardContent
               className="dashboard-card-content"
-              sx={{ display: "flex", justifyContent: "center" }}
+              sx={{
+                display: "flex",
+                justifyContent: "center",
+                height: "60vh", // Set a responsive height using viewport height
+                width: "100%",
+                overflow: "hidden", // Prevent overflow
+              }}
             >
-              <svg ref={svgRef}></svg>
+              <Box sx={{ width: "100%", height: "100%" }}>
+                <svg
+                  ref={svgRef}
+                  style={{ width: "100%", height: "100%" }}
+                ></svg>
+              </Box>
             </CardContent>
           </Card>
         </Grid>

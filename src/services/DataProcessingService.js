@@ -181,11 +181,22 @@ class DataProcessingService {
           const timeOut = new Date(movement.timeOut);
 
           if (timeIn && timeOut && timeOut > timeIn) {
-            const usageHours = (timeOut - timeIn) / (1000 * 60 * 60);
-            totalUsageHours += usageHours;
+            // Calculate the exact time difference in milliseconds
+            const timeDiffMs = timeOut.getTime() - timeIn.getTime();
+
+            // Convert to hours with precision to avoid rounding errors
+            const usageHours = timeDiffMs / (1000 * 60 * 60);
+
+            // Round to 2 decimal places to avoid floating point precision issues
+            const roundedHours = Math.round(usageHours * 100) / 100;
+
+            totalUsageHours += roundedHours;
           }
         }
       });
+
+      // Round the final total to avoid floating point precision issues
+      totalUsageHours = Math.round(totalUsageHours * 100) / 100;
 
       // Recommend maintenance based on usage thresholds
       // These thresholds would be different for each device type in a real system

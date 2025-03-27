@@ -736,14 +736,22 @@ ipcMain.handle("generate-recommendations", async () => {
           const timeOut = new Date(movement.timeOut);
 
           if (timeIn && timeOut && timeOut > timeIn) {
-            const usageHours = (timeOut - timeIn) / (1000 * 60 * 60);
-            deviceTypeMap[deviceType].totalHours += usageHours;
+            // Calculate the exact time difference in milliseconds
+            const timeDiffMs = timeOut.getTime() - timeIn.getTime();
+
+            // Convert to hours with precision to avoid rounding errors
+            const usageHours = timeDiffMs / (1000 * 60 * 60);
+
+            // Round to 2 decimal places to avoid floating point precision issues
+            const roundedHours = Math.round(usageHours * 100) / 100;
+
+            deviceTypeMap[deviceType].totalHours += roundedHours;
 
             if (
               movement.status &&
               movement.status.toLowerCase().includes("in use")
             ) {
-              deviceTypeMap[deviceType].inUseHours += usageHours;
+              deviceTypeMap[deviceType].inUseHours += roundedHours;
             }
           }
         }
@@ -754,6 +762,14 @@ ipcMain.handle("generate-recommendations", async () => {
           Object.keys(deviceTypeMap).length
         } device types for utilization`
       );
+
+      // Round the final totals for each device type to avoid floating point precision issues
+      Object.keys(deviceTypeMap).forEach((deviceType) => {
+        deviceTypeMap[deviceType].totalHours =
+          Math.round(deviceTypeMap[deviceType].totalHours * 100) / 100;
+        deviceTypeMap[deviceType].inUseHours =
+          Math.round(deviceTypeMap[deviceType].inUseHours * 100) / 100;
+      });
 
       // Generate purchase recommendations
       Object.entries(deviceTypeMap).forEach(([deviceType, stats]) => {
@@ -822,10 +838,24 @@ ipcMain.handle("generate-recommendations", async () => {
           const timeOut = new Date(movement.timeOut);
 
           if (timeIn && timeOut && timeOut > timeIn) {
-            const usageHours = (timeOut - timeIn) / (1000 * 60 * 60);
-            deviceUsageHours[deviceId] += usageHours;
+            // Calculate the exact time difference in milliseconds
+            const timeDiffMs = timeOut.getTime() - timeIn.getTime();
+
+            // Convert to hours with precision to avoid rounding errors
+            const usageHours = timeDiffMs / (1000 * 60 * 60);
+
+            // Round to 2 decimal places to avoid floating point precision issues
+            const roundedHours = Math.round(usageHours * 100) / 100;
+
+            deviceUsageHours[deviceId] += roundedHours;
           }
         }
+      });
+
+      // Round the final total for each device to avoid floating point precision issues
+      Object.keys(deviceUsageHours).forEach((deviceId) => {
+        deviceUsageHours[deviceId] =
+          Math.round(deviceUsageHours[deviceId] * 100) / 100;
       });
 
       // Generate maintenance recommendations
