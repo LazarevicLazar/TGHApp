@@ -18,6 +18,7 @@ import {
   Map as MapIcon,
   CloudUpload as CloudUploadIcon,
   Menu as MenuIcon,
+  Analytics as AnalyticsIcon,
 } from "@mui/icons-material";
 
 // Import views
@@ -25,6 +26,7 @@ import Dashboard from "./views/Dashboard";
 import DataTable from "./views/DataTable";
 import HeatMap from "./views/HeatMap";
 import ImportData from "./views/ImportData";
+import OptimizationAnalysis from "./views/OptimizationAnalysis";
 
 // Define views
 const views = [
@@ -41,6 +43,12 @@ const views = [
     component: DataTable,
   },
   { id: "heat-map", label: "Heat Map", icon: <MapIcon />, component: HeatMap },
+  {
+    id: "optimization",
+    label: "Optimization Analysis",
+    icon: <AnalyticsIcon />,
+    component: OptimizationAnalysis,
+  },
   {
     id: "import-data",
     label: "Import Data",

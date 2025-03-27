@@ -8,11 +8,17 @@
  */
 
 import { calculateDistance } from "../utils/helpers";
+import {
+  Equipment,
+  findOptimalStorageLocation,
+  createGraph,
+} from "../algorithms/equipment_optimizer";
 
 class OptimizationService {
   constructor() {
     this.graphData = null;
     this.floorPlanData = null;
+    this.graph = null;
   }
 
   /**
@@ -23,6 +29,12 @@ class OptimizationService {
   initialize(graphData, floorPlanData) {
     this.graphData = graphData;
     this.floorPlanData = floorPlanData;
+
+    // Create a graph object for the equipment optimizer
+    if (graphData && graphData.nodes && graphData.edges) {
+      this.graph = createGraph(graphData.nodes, graphData.edges);
+    }
+
     console.log("Optimization service initialized");
   }
 
@@ -32,126 +44,82 @@ class OptimizationService {
    * @returns {Array} Optimization recommendations
    */
   optimizeWalkingDistance(movements) {
-    if (!this.graphData || !movements || movements.length === 0) {
+    if (
+      !this.graphData ||
+      !this.graph ||
+      !movements ||
+      movements.length === 0
+    ) {
       return [];
     }
 
     const recommendations = [];
 
     try {
-      // Group movements by device type
-      const deviceTypes = {};
+      // Group movements by device ID
+      const deviceMap = {};
 
       movements.forEach((movement) => {
         const deviceId = movement.deviceId || "";
-        const deviceType = deviceId.split("-")[0] || "Unknown";
 
-        if (!deviceTypes[deviceType]) {
-          deviceTypes[deviceType] = [];
+        if (!deviceId) return;
+
+        if (!deviceMap[deviceId]) {
+          deviceMap[deviceId] = new Equipment(deviceId);
         }
 
-        deviceTypes[deviceType].push(movement);
+        // Add usage data to the equipment object
+        if (
+          movement.fromLocation &&
+          movement.toLocation &&
+          movement.timeIn &&
+          movement.timeOut
+        ) {
+          deviceMap[deviceId].addUsage(
+            movement.toLocation,
+            movement.status || "Unknown",
+            movement.timeIn,
+            movement.timeOut
+          );
+        }
       });
 
-      // Analyze each device type
-      Object.entries(deviceTypes).forEach(([deviceType, deviceMovements]) => {
-        // Skip if not enough data
-        if (deviceMovements.length < 5) return;
+      // Analyze each device
+      Object.entries(deviceMap).forEach(([deviceId, equipment]) => {
+        // Skip if not enough usage history
+        if (equipment.usageHistory.length < 3) return;
 
-        // Build frequency map of location requests
-        const locationRequests = {};
+        // Find optimal storage location
+        const result = findOptimalStorageLocation(equipment, this.graph);
 
-        deviceMovements.forEach((movement) => {
-          const location = movement.toLocation;
+        // Only recommend if there's a significant improvement
+        if (
+          result.percentImprovement > 10 &&
+          result.currentLocation !== result.optimalLocation
+        ) {
+          const deviceType = deviceId.split("-")[0] || "Unknown";
 
-          if (location) {
-            if (!locationRequests[location]) {
-              locationRequests[location] = 0;
-            }
-            locationRequests[location]++;
-          }
-        });
-
-        // Get potential storage locations (rooms with "STOR" in the name)
-        const storageLocations = this.graphData.nodes.filter(
-          (node) =>
-            node.includes("STOR") || node.toLowerCase().includes("storage")
-        );
-
-        if (storageLocations.length === 0) {
-          // If no storage locations found, use all locations as potential homes
-          storageLocations.push(...Object.keys(locationRequests));
-        }
-
-        // Calculate total weighted distance for each potential home location
-        const locationScores = {};
-
-        storageLocations.forEach((homeLocation) => {
-          let totalWeightedDistance = 0;
-
-          Object.entries(locationRequests).forEach(
-            ([requestLocation, frequency]) => {
-              const distance = this.getShortestPathDistance(
-                homeLocation,
-                requestLocation
-              );
-              totalWeightedDistance += distance * frequency;
-            }
-          );
-
-          locationScores[homeLocation] = totalWeightedDistance;
-        });
-
-        // Find the optimal home location
-        const sortedLocations = Object.entries(locationScores).sort(
-          (a, b) => a[1] - b[1]
-        );
-
-        if (sortedLocations.length > 0) {
-          const optimalLocation = sortedLocations[0][0];
-          const optimalScore = sortedLocations[0][1];
-
-          // Find current home location (most frequent fromLocation)
-          const fromLocationCounts = {};
-
-          deviceMovements.forEach((movement) => {
-            const from = movement.fromLocation;
-
-            if (from) {
-              if (!fromLocationCounts[from]) {
-                fromLocationCounts[from] = 0;
-              }
-              fromLocationCounts[from]++;
-            }
+          recommendations.push({
+            _id: `walking_${deviceId}_${Date.now()}`,
+            type: "placement",
+            title: `Optimize ${deviceType} Placement`,
+            description: `Moving ${deviceId} from ${
+              result.currentLocation
+            } to ${
+              result.optimalLocation
+            } would reduce staff walking distance by approximately ${Math.round(
+              result.percentImprovement
+            )}%.`,
+            savings: `~${Math.round(
+              result.percentImprovement * 2
+            )} hours/month`,
+            implemented: false,
+            createdAt: new Date().toISOString(),
+            deviceId: deviceId,
+            currentLocation: result.currentLocation,
+            optimalLocation: result.optimalLocation,
+            distanceSaved: Math.round(result.distanceSaved),
           });
-
-          const currentHomeLocation =
-            Object.entries(fromLocationCounts).sort(
-              (a, b) => b[1] - a[1]
-            )[0]?.[0] || "Unknown";
-
-          // Only recommend if different from current and significant improvement
-          if (optimalLocation !== currentHomeLocation) {
-            const currentScore =
-              locationScores[currentHomeLocation] || Infinity;
-            const improvement =
-              ((currentScore - optimalScore) / currentScore) * 100;
-
-            if (improvement > 10) {
-              // Only recommend if >10% improvement
-              recommendations.push({
-                _id: `walking_${deviceType}_${Date.now()}`,
-                type: "placement",
-                title: `Optimize ${deviceType} Placement`,
-                description: `Moving ${deviceType} equipment from ${currentHomeLocation} to ${optimalLocation} would reduce staff walking distance by approximately ${Math.round(
-                  improvement
-                )}%.`,
-                savings: `~${Math.round(improvement * 2)} hours/month`,
-                implemented: false,
-                createdAt: new Date().toISOString(),
-              });
-            }
-          }
         }
       });
     } catch (error) {
@@ -265,7 +233,7 @@ class OptimizationService {
    * @returns {Object} Utilization analysis results
    */
   analyzeUtilization(movements) {
-    if (!movements || movements.length === 0) {
+    if (!movements || movements.length === 0 || !this.graph) {
       return {
         deviceTypes: [],
         peakTimes: [],
@@ -274,44 +242,31 @@ class OptimizationService {
     }
 
     try {
-      // Group by device type
-      const deviceTypes = {};
+      // Group by device ID
+      const deviceMap = {};
 
       movements.forEach((movement) => {
         const deviceId = movement.deviceId || "";
-        const deviceType = deviceId.split("-")[0] || "Unknown";
 
-        if (!deviceTypes[deviceType]) {
-          deviceTypes[deviceType] = {
-            movements: [],
-            totalHours: 0,
-            inUseHours: 0,
-            hourlyUsage: Array(24).fill(0),
-          };
+        if (!deviceId) return;
+
+        if (!deviceMap[deviceId]) {
+          deviceMap[deviceId] = new Equipment(deviceId);
         }
 
-        deviceTypes[deviceType].movements.push(movement);
-
-        // Calculate usage hours
-        if (movement.timeIn && movement.timeOut) {
-          const timeIn = new Date(movement.timeIn);
-          const timeOut = new Date(movement.timeOut);
-
-          if (timeIn && timeOut && timeOut > timeIn) {
-            const usageHours = (timeOut - timeIn) / (1000 * 60 * 60);
-            deviceTypes[deviceType].totalHours += usageHours;
-
-            if (
-              movement.status &&
-              movement.status.toLowerCase().includes("in use")
-            ) {
-              deviceTypes[deviceType].inUseHours += usageHours;
-            }
-
-            // Track hourly usage for time-series analysis
-            const hour = timeIn.getHours();
-            deviceTypes[deviceType].hourlyUsage[hour]++;
-          }
+        // Add usage data to the equipment object
+        if (
+          movement.fromLocation &&
+          movement.toLocation &&
+          movement.timeIn &&
+          movement.timeOut
+        ) {
+          deviceMap[deviceId].addUsage(
+            movement.toLocation,
+            movement.status || "Unknown",
+            movement.timeIn,
+            movement.timeOut
+          );
         }
       });
 
@@ -320,7 +275,88 @@ class OptimizationService {
       const peakTimes = {};
       const recommendations = [];
 
-      Object.entries(deviceTypes).forEach(([deviceType, stats]) => {
+      // Group devices by type for aggregate analysis
+      const deviceTypeMap = {};
+
+      Object.entries(deviceMap).forEach(([deviceId, equipment]) => {
+        const deviceType = deviceId.split("-")[0] || "Unknown";
+
+        if (!deviceTypeMap[deviceType]) {
+          deviceTypeMap[deviceType] = {
+            devices: [],
+            totalHours: 0,
+            inUseHours: 0,
+            hourlyUsage: Array(24).fill(0),
+          };
+        }
+
+        deviceTypeMap[deviceType].devices.push(equipment);
+
+        // Analyze individual device for purchase recommendations
+        const purchaseAnalysis = equipment.shouldPurchaseMore(this.graph);
+
+        if (purchaseAnalysis.needsMore) {
+          const metrics = purchaseAnalysis.metrics;
+          const additionalUnits = Math.ceil((metrics.avgUsageRatio - 0.8) * 10);
+
+          // Calculate peak hours from usage history
+          const hourCounts = Array(24).fill(0);
+          equipment.usageHistory.forEach(([room, status, timeIn]) => {
+            if (timeIn) {
+              const hour = new Date(timeIn).getHours();
+              hourCounts[hour]++;
+            }
+          });
+
+          const maxUsage = Math.max(...hourCounts);
+          const peakHours = hourCounts
+            .map((usage, hour) => ({ hour, usage }))
+            .filter((h) => h.usage > maxUsage * 0.7)
+            .map((h) => h.hour);
+
+          recommendations.push({
+            _id: `utilization_${deviceId}_${Date.now()}`,
+            type: "purchase",
+            title: `Additional ${deviceType} Units Needed`,
+            description: `${deviceType} equipment (${deviceId}) is utilized at ${Math.round(
+              metrics.avgUsageRatio * 100
+            )}% capacity. Consider purchasing ${
+              additionalUnits > 0 ? additionalUnits : 1
+            } additional unit(s) to reduce wait times during peak hours (${peakHours
+              .map((h) => `${h}:00`)
+              .join(", ")}).`,
+            savings: `Improved patient care and reduced wait times`,
+            implemented: false,
+            createdAt: new Date().toISOString(),
+            deviceId: deviceId,
+            metrics: metrics,
+          });
+        }
+
+        // Aggregate data for device type analysis
+        equipment.usageHistory.forEach(([room, status, timeIn, timeOut]) => {
+          if (timeIn && timeOut) {
+            const start = new Date(timeIn);
+            const end = new Date(timeOut);
+
+            if (start && end && end > start) {
+              const usageHours = (end - start) / (1000 * 60 * 60);
+              deviceTypeMap[deviceType].totalHours += usageHours;
+
+              if (status.toLowerCase().includes("in use")) {
+                deviceTypeMap[deviceType].inUseHours += usageHours;
+              }
+
+              // Track hourly usage
+              const hour = start.getHours();
+              deviceTypeMap[deviceType].hourlyUsage[hour]++;
+            }
+          }
+        });
+      });
+
+      // Calculate aggregate metrics by device type
+      Object.entries(deviceTypeMap).forEach(([deviceType, stats]) => {
         // Calculate utilization rate
         const utilizationRate =
           stats.totalHours > 0
@@ -337,25 +373,6 @@ class OptimizationService {
           .map((h) => h.hour);
 
         peakTimes[deviceType] = peakHours;
-
-        // Generate purchase recommendations based on utilization
-        if (utilizationRate > 80) {
-          const additionalUnits = Math.ceil((utilizationRate - 80) / 10);
-
-          recommendations.push({
-            _id: `utilization_${deviceType}_${Date.now()}`,
-            type: "purchase",
-            title: `Additional ${deviceType} Units Needed`,
-            description: `${deviceType} equipment is utilized at ${Math.round(
-              utilizationRate
-            )}% capacity. Consider purchasing ${additionalUnits} additional unit(s) to reduce wait times during peak hours (${peakHours
-              .map((h) => `${h}:00`)
-              .join(", ")}).`,
-            savings: `Improved patient care and reduced wait times`,
-            implemented: false,
-            createdAt: new Date().toISOString(),
-          });
-        }
       });
 
       return {
@@ -386,64 +403,50 @@ class OptimizationService {
     const recommendations = [];
 
     try {
-      // Group by device ID
-      const devices = {};
+      // Group by device ID - reuse the same equipment objects if we already have them
+      const deviceMap = {};
 
       movements.forEach((movement) => {
-        const deviceId = movement.deviceId;
+        const deviceId = movement.deviceId || "";
 
         if (!deviceId) return;
 
-        if (!devices[deviceId]) {
-          devices[deviceId] = {
-            movements: [],
-            totalUsageHours: 0,
-            movementCount: 0,
-            lastMaintenance: null,
-          };
+        if (!deviceMap[deviceId]) {
+          deviceMap[deviceId] = new Equipment(deviceId);
         }
 
-        devices[deviceId].movements.push(movement);
-        devices[deviceId].movementCount++;
-
-        // Calculate usage hours
-        if (movement.timeIn && movement.timeOut) {
-          const timeIn = new Date(movement.timeIn);
-          const timeOut = new Date(movement.timeOut);
-
-          if (timeIn && timeOut && timeOut > timeIn) {
-            const usageHours = (timeOut - timeIn) / (1000 * 60 * 60);
-            devices[deviceId].totalUsageHours += usageHours;
-          }
+        // Add usage data to the equipment object
+        if (
+          movement.fromLocation &&
+          movement.toLocation &&
+          movement.timeIn &&
+          movement.timeOut
+        ) {
+          deviceMap[deviceId].addUsage(
+            movement.toLocation,
+            movement.status || "Unknown",
+            movement.timeIn,
+            movement.timeOut
+          );
         }
       });
 
-      // Define maintenance thresholds by device type
-      const maintenanceThresholds = {
-        Ventilator: { hours: 500, movements: 100 },
-        Ultrasound: { hours: 300, movements: 50 },
-        Defibrillator: { hours: 200, movements: 30 },
-        "IV-Pump": { hours: 1000, movements: 200 },
-        Monitor: { hours: 800, movements: 150 },
-        default: { hours: 500, movements: 100 },
-      };
-
       // Generate maintenance recommendations
-      Object.entries(devices).forEach(([deviceId, stats]) => {
-        const deviceType = deviceId.split("-")[0] || "Unknown";
-        const threshold =
-          maintenanceThresholds[deviceType] || maintenanceThresholds.default;
+      Object.entries(deviceMap).forEach(([deviceId, equipment]) => {
+        // Skip if not enough usage history
+        if (equipment.usageHistory.length < 3) return;
 
-        // Calculate maintenance score based on usage hours and movement count
-        const hoursScore = stats.totalUsageHours / threshold.hours;
-        const movementScore = stats.movementCount / threshold.movements;
-        const maintenanceScore = hoursScore * 0.7 + movementScore * 0.3;
+        // Check if maintenance is needed
+        const maintenanceResult = equipment.needsMaintenance();
 
-        // Recommend maintenance if score is high
-        if (maintenanceScore > 0.8) {
-          const urgency = maintenanceScore >= 1 ? "urgent" : "upcoming";
+        if (maintenanceResult.needsMaintenance) {
+          const deviceType = maintenanceResult.deviceType;
+          const urgency =
+            maintenanceResult.urgencyLevel >= 1 ? "urgent" : "upcoming";
           const timeframe =
-            maintenanceScore >= 1 ? "immediately" : "within the next month";
+            maintenanceResult.urgencyLevel >= 1
+              ? "immediately"
+              : "within the next month";
 
           recommendations.push({
             _id: `maintenance_${deviceId}_${Date.now()}`,
@@ -452,14 +455,20 @@ class OptimizationService {
               urgency === "urgent" ? "Urgent" : "Scheduled"
             } Maintenance for ${deviceId}`,
             description: `Based on usage patterns (${Math.round(
-              stats.totalUsageHours
-            )} hours, ${
-              stats.movementCount
-            } movements), ${deviceId} requires ${urgency} maintenance ${timeframe}.`,
+              maintenanceResult.hoursUsed
+            )} hours of operation),
+              ${deviceId} requires ${urgency} maintenance ${timeframe}.
+              This device has reached ${Math.round(
+                maintenanceResult.urgencyLevel * 100
+              )}% of its maintenance threshold.`,
             savings:
               "Preventative maintenance reduces downtime and extends equipment lifespan",
             implemented: false,
             createdAt: new Date().toISOString(),
+            deviceId: deviceId,
+            hoursUsed: Math.round(maintenanceResult.hoursUsed),
+            threshold: maintenanceResult.threshold,
+            urgencyLevel: maintenanceResult.urgencyLevel,
           });
         }
       });

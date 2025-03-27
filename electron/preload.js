@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld("electron", {
   generateRecommendations: () => ipcRenderer.invoke("generate-recommendations"),
   implementRecommendation: (recommendationId) =>
     ipcRenderer.invoke("implement-recommendation", recommendationId),
+  implementAllRecommendations: () =>
+    ipcRenderer.invoke("implement-all-recommendations"),
   resetDatabase: () => ipcRenderer.invoke("reset-database"),
 
   // App info

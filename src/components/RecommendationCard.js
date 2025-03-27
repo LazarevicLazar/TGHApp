@@ -176,7 +176,10 @@ function RecommendationCard({ recommendation, onImplement }) {
             size="small"
             variant="contained"
             endIcon={<ArrowForwardIcon />}
-            onClick={() => onImplement(recommendation)}
+            onClick={(e) => {
+              e.preventDefault(); // Prevent default behavior that causes scrolling
+              onImplement(recommendation);
+            }}
             sx={{
               backgroundColor: getColor(),
               "&:hover": {

@@ -33,6 +33,7 @@ function Dashboard() {
     loading,
     generateRecommendations,
     implementRecommendation,
+    implementAllRecommendations,
   } = useDataContext();
   const [equipmentStats, setEquipmentStats] = useState(emptyEquipmentData);
   const [locationStats, setLocationStats] = useState(emptyDepartmentData);
@@ -191,6 +192,23 @@ function Dashboard() {
     }
   };
 
+  const handleImplementAllRecommendations = async () => {
+    try {
+      // Call the implementAllRecommendations function from the DataContext
+      const result = await implementAllRecommendations();
+
+      if (result.success) {
+        // Clear all displayed recommendations
+        setDisplayedRecommendations([]);
+        console.log(
+          `Successfully implemented ${result.implementedCount} recommendations`
+        );
+      }
+    } catch (error) {
+      console.error("Error implementing all recommendations:", error);
+    }
+  };
+
   const handleGenerateRecommendations = async () => {
     try {
       const result = await generateRecommendations();
@@ -280,7 +298,29 @@ function Dashboard() {
             subheader="Based on equipment usage and movement patterns"
             loading={loading}
             action={
-              <Box sx={{ display: "flex", alignItems: "center" }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                {displayedRecommendations.length > 0 && (
+                  <Box
+                    component="button"
+                    onClick={handleImplementAllRecommendations}
+                    sx={{
+                      backgroundColor: "success.main",
+                      color: "white",
+                      border: "none",
+                      borderRadius: 1,
+                      px: 2,
+                      py: 1,
+                      fontSize: "0.875rem",
+                      fontWeight: "medium",
+                      cursor: "pointer",
+                      "&:hover": {
+                        backgroundColor: "success.dark",
+                      },
+                    }}
+                  >
+                    Implement All
+                  </Box>
+                )}
                 <Box
                   component="button"
                   onClick={handleGenerateRecommendations}

@@ -3,6 +3,26 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 // Create context
 const DataContext = createContext();
 
+// Helper function to parse hours saved from savings string
+const parseHoursSaved = (savingsString) => {
+  if (!savingsString) return 0;
+
+  // Try to extract hours from strings like "~120 hours/month"
+  const hoursMatch = savingsString.match(/(\d+)\s*hours/i);
+  if (hoursMatch && hoursMatch[1]) {
+    return parseFloat(hoursMatch[1]);
+  }
+
+  // Try to extract dollar amount and convert to hours (assuming $50/hour)
+  const moneyMatch = savingsString.match(/\$(\d+),?(\d*)/);
+  if (moneyMatch) {
+    const amount = parseFloat(moneyMatch[1] + (moneyMatch[2] || ""));
+    return amount / 50; // Convert dollars to hours
+  }
+
+  return 0;
+};
+
 // Custom hook to use the data context
 export const useDataContext = () => useContext(DataContext);
 
@@ -13,6 +33,8 @@ export const DataProvider = ({ children }) => {
   const [locations, setLocations] = useState([]);
   const [movements, setMovements] = useState([]);
   const [recommendations, setRecommendations] = useState([]);
+  const [optimizationHistory, setOptimizationHistory] = useState([]);
+  const [totalSavings, setTotalSavings] = useState({ hours: 0, money: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -21,6 +43,28 @@ export const DataProvider = ({ children }) => {
     const loadData = async () => {
       try {
         setLoading(true);
+
+        // Load optimization history from localStorage
+        try {
+          const savedHistory = localStorage.getItem("optimizationHistory");
+          if (savedHistory) {
+            const history = JSON.parse(savedHistory);
+            setOptimizationHistory(history);
+
+            // Calculate total savings
+            let totalHours = 0;
+            history.forEach((item) => {
+              totalHours += item.hoursSaved || 0;
+            });
+
+            // Convert hours to money (assuming $50/hour labor cost)
+            const totalMoney = totalHours * 50;
+
+            setTotalSavings({ hours: totalHours, money: totalMoney });
+          }
+        } catch (err) {
+          console.error("Error loading optimization history:", err);
+        }
 
         // Check if we're running in Electron
         if (window.electron) {
@@ -141,16 +185,55 @@ export const DataProvider = ({ children }) => {
     try {
       setLoading(true);
 
+      // Find the recommendation to implement
+      const recommendation = recommendations.find(
+        (rec) => rec._id === recommendationId
+      );
+
+      if (!recommendation) {
+        return { success: false, message: "Recommendation not found" };
+      }
+
       if (window.electron) {
         const result = await window.electron.implementRecommendation(
           recommendationId
         );
+
         if (result.success) {
+          // Track the optimization in history
+          const newOptimization = {
+            date: new Date().toISOString(),
+            type: recommendation.type,
+            description: recommendation.description,
+            impact: recommendation.savings,
+            hoursSaved: parseHoursSaved(recommendation.savings),
+            deviceId: recommendation.deviceId,
+            implemented: true,
+          };
+
+          // Update optimization history
+          const updatedHistory = [...optimizationHistory, newOptimization];
+          setOptimizationHistory(updatedHistory);
+
+          // Save to localStorage
+          localStorage.setItem(
+            "optimizationHistory",
+            JSON.stringify(updatedHistory)
+          );
+
+          // Update total savings
+          const hoursSaved = parseHoursSaved(recommendation.savings);
+          setTotalSavings((prev) => ({
+            hours: prev.hours + hoursSaved,
+            money: prev.money + hoursSaved * 50, // $50 per hour
+          }));
+
           // Remove the recommendation from the state
           setRecommendations((prevRecommendations) =>
             prevRecommendations.filter((rec) => rec._id !== recommendationId)
           );
         }
+
         return result;
       } else {
         // For development without Electron
@@ -158,6 +241,34 @@ export const DataProvider = ({ children }) => {
           "Would implement recommendation in Electron:",
           recommendationId
         );
+
+        // Track the optimization in history
+        const newOptimization = {
+          date: new Date().toISOString(),
+          type: recommendation.type,
+          description: recommendation.description,
+          impact: recommendation.savings,
+          hoursSaved: parseHoursSaved(recommendation.savings),
+          deviceId: recommendation.deviceId,
+          implemented: true,
+        };
+
+        // Update optimization history
+        const updatedHistory = [...optimizationHistory, newOptimization];
+        setOptimizationHistory(updatedHistory);
+
+        // Save to localStorage
+        localStorage.setItem(
+          "optimizationHistory",
+          JSON.stringify(updatedHistory)
+        );
+
+        // Update total savings
+        const hoursSaved = parseHoursSaved(recommendation.savings);
+        setTotalSavings((prev) => ({
+          hours: prev.hours + hoursSaved,
+          money: prev.money + hoursSaved * 50, // $50 per hour
+        }));
 
         // Remove the recommendation from the state
         setRecommendations((prevRecommendations) =>
@@ -226,6 +337,13 @@ export const DataProvider = ({ children }) => {
           setRecommendations([]);
           setData([]);
 
+          // Clear optimization history
+          setOptimizationHistory([]);
+          localStorage.removeItem("optimizationHistory");
+
+          // Reset total savings
+          setTotalSavings({ hours: 0, money: 0 });
+
           return { success: true, message: result.message };
         } else {
           setError("Failed to reset database");
@@ -242,12 +360,122 @@ export const DataProvider = ({ children }) => {
         setRecommendations([]);
         setData([]);
 
+        // Clear optimization history
+        setOptimizationHistory([]);
+        localStorage.removeItem("optimizationHistory");
+
+        // Reset total savings
+        setTotalSavings({ hours: 0, money: 0 });
+
         return { success: true, message: "Database reset (mock)" };
       }
     } catch (err) {
       console.error("Error resetting database:", err);
       setError(err.message);
       return { success: false, message: err.message };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Implement all recommendations at once
+  const implementAllRecommendations = async () => {
+    try {
+      setLoading(true);
+
+      if (window.electron) {
+        const result = await window.electron.implementAllRecommendations();
+
+        if (result.success) {
+          // Create optimization history entries for all implemented recommendations
+          const newOptimizations = recommendations.map((recommendation) => ({
+            date: new Date().toISOString(),
+            type: recommendation.type,
+            description: recommendation.description,
+            impact: recommendation.savings,
+            hoursSaved: parseHoursSaved(recommendation.savings),
+            deviceId: recommendation.deviceId,
+            implemented: true,
+          }));
+
+          // Calculate total hours saved
+          let totalHoursSaved = 0;
+          newOptimizations.forEach((opt) => {
+            totalHoursSaved += opt.hoursSaved || 0;
+          });
+
+          // Update optimization history
+          const updatedHistory = [...optimizationHistory, ...newOptimizations];
+          setOptimizationHistory(updatedHistory);
+
+          // Save to localStorage
+          localStorage.setItem(
+            "optimizationHistory",
+            JSON.stringify(updatedHistory)
+          );
+
+          // Update total savings
+          setTotalSavings((prev) => ({
+            hours: prev.hours + totalHoursSaved,
+            money: prev.money + totalHoursSaved * 50, // $50 per hour
+          }));
+
+          // Clear all recommendations
+          setRecommendations([]);
+        }
+
+        return result;
+      } else {
+        // For development without Electron
+        console.log("Would implement all recommendations in Electron");
+
+        // Create optimization history entries for all implemented recommendations
+        const newOptimizations = recommendations.map((recommendation) => ({
+          date: new Date().toISOString(),
+          type: recommendation.type,
+          description: recommendation.description,
+          impact: recommendation.savings,
+          hoursSaved: parseHoursSaved(recommendation.savings),
+          deviceId: recommendation.deviceId,
+          implemented: true,
+        }));
+
+        // Calculate total hours saved
+        let totalHoursSaved = 0;
+        newOptimizations.forEach((opt) => {
+          totalHoursSaved += opt.hoursSaved || 0;
+        });
+
+        // Update optimization history
+        const updatedHistory = [...optimizationHistory, ...newOptimizations];
+        setOptimizationHistory(updatedHistory);
+
+        // Save to localStorage
+        localStorage.setItem(
+          "optimizationHistory",
+          JSON.stringify(updatedHistory)
+        );
+
+        // Update total savings
+        setTotalSavings((prev) => ({
+          hours: prev.hours + totalHoursSaved,
+          money: prev.money + totalHoursSaved * 50, // $50 per hour
+        }));
+
+        // Clear all recommendations
+        setRecommendations([]);
+
+        return {
+          success: true,
+          numRemoved: recommendations.length,
+          implementedCount: recommendations.length,
+          message: `Successfully implemented ${recommendations.length} recommendations`,
+        };
+      }
+    } catch (err) {
+      console.error("Error implementing all recommendations:", err);
+      setError(err.message);
+      return { success: false };
     } finally {
       setLoading(false);
     }
@@ -265,12 +493,17 @@ export const DataProvider = ({ children }) => {
     setMovements,
     recommendations,
     setRecommendations,
+    optimizationHistory,
+    setOptimizationHistory,
+    totalSavings,
+    setTotalSavings,
     loading,
     setLoading,
     error,
     setError,
     generateRecommendations,
     implementRecommendation,
+    implementAllRecommendations,
     resetDatabase,
     importFromCsv,
   };
