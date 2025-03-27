@@ -17,7 +17,6 @@ import {
   Chip,
   LinearProgress,
   Alert,
-  Tooltip,
 } from "@mui/material";
 import { useDataContext } from "../context/DataContext";
 import MetricCard from "../components/MetricCard";
@@ -529,69 +528,87 @@ function OptimizationAnalysis() {
                                   borderTop: "1px dashed #eee",
                                 }}
                               >
-                                <Typography variant="subtitle2" sx={{ mb: 2 }}>
+                                <Typography variant="subtitle2" sx={{ mb: 1 }}>
                                   Individual Device Status
                                 </Typography>
-                                <Box
-                                  sx={{
-                                    display: "flex",
-                                    flexWrap: "wrap",
-                                    gap: 1,
-                                  }}
-                                >
-                                  {device.devices.map((individualDevice) => (
-                                    <Tooltip
-                                      key={individualDevice.deviceId}
-                                      title={
-                                        <React.Fragment>
-                                          <Typography variant="body2">
-                                            {individualDevice.deviceId}
-                                          </Typography>
-                                          <Typography variant="caption">
-                                            {`${individualDevice.usageHours} hours / ${individualDevice.threshold} hour threshold`}
-                                          </Typography>
-                                          <Typography variant="caption">
-                                            {`Status: ${individualDevice.status}`}
-                                          </Typography>
-                                        </React.Fragment>
-                                      }
-                                      arrow
+                                {device.devices.map((individualDevice) => (
+                                  <Box
+                                    key={individualDevice.deviceId}
+                                    sx={{ mb: 2 }}
+                                  >
+                                    <Box
+                                      sx={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        mb: 0.5,
+                                      }}
                                     >
-                                      <Box
-                                        sx={{
-                                          width: 40,
-                                          height: 40,
-                                          borderRadius: "50%",
-                                          display: "flex",
-                                          alignItems: "center",
-                                          justifyContent: "center",
-                                          backgroundColor:
-                                            individualDevice.status === "Good"
-                                              ? "#4caf50"
-                                              : individualDevice.status ===
-                                                "Maintenance Soon"
-                                              ? "#ff9800"
-                                              : "#f44336",
-                                          color: "white",
-                                          fontSize: "0.7rem",
-                                          fontWeight: "bold",
-                                          cursor: "pointer",
-                                          boxShadow:
-                                            "0 2px 4px rgba(0,0,0,0.2)",
-                                          "&:hover": {
-                                            opacity: 0.9,
-                                            boxShadow:
-                                              "0 3px 6px rgba(0,0,0,0.3)",
-                                          },
-                                        }}
-                                      >
-                                        {individualDevice.deviceId.split(
-                                          "-"
-                                        )[1] || "?"}
+                                      <Typography variant="body2">
+                                        {individualDevice.deviceId}
+                                      </Typography>
+                                      <Chip
+                                        label={individualDevice.status}
+                                        size="small"
+                                        color={
+                                          individualDevice.status === "Good"
+                                            ? "success"
+                                            : individualDevice.status ===
+                                              "Maintenance Soon"
+                                            ? "warning"
+                                            : "error"
+                                        }
+                                        sx={{ height: 20, fontSize: "0.7rem" }}
+                                      />
+                                    </Box>
+                                    <Box
+                                      sx={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                      }}
+                                    >
+                                      <Box sx={{ width: "100%", mr: 1 }}>
+                                        <LinearProgress
+                                          variant="determinate"
+                                          value={
+                                            individualDevice.progressPercentage
+                                          }
+                                          sx={{
+                                            height: 6,
+                                            borderRadius: 3,
+                                            backgroundColor: "#e0e0e0",
+                                            "& .MuiLinearProgress-bar": {
+                                              backgroundColor:
+                                                individualDevice.progressPercentage >=
+                                                100
+                                                  ? "#f44336"
+                                                  : individualDevice.progressPercentage >=
+                                                    80
+                                                  ? "#ff9800"
+                                                  : "#4caf50",
+                                              borderRadius: 3,
+                                            },
+                                          }}
+                                        />
                                       </Box>
-                                    </Tooltip>
-                                  ))}
-                                </Box>
+                                      <Box sx={{ minWidth: 35 }}>
+                                        <Typography
+                                          variant="caption"
+                                          color="text.secondary"
+                                        >
+                                          {`${Math.round(
+                                            individualDevice.progressPercentage
+                                          )}%`}
+                                        </Typography>
+                                      </Box>
+                                    </Box>
+                                    <Typography
+                                      variant="caption"
+                                      color="text.secondary"
+                                    >
+                                      {`${individualDevice.usageHours} hours / ${individualDevice.threshold} hour threshold`}
+                                    </Typography>
+                                  </Box>
+                                ))}
                               </Box>
                             )}
                         </Box>
