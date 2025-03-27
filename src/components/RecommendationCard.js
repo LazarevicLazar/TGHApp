@@ -161,15 +161,17 @@ function RecommendationCard({ recommendation, onImplement }) {
               : "rgba(255, 255, 255, 0.05)",
         }}
       >
-        <Typography
-          variant="subtitle2"
-          sx={{
-            color: getColor(),
-            fontWeight: "medium",
-          }}
-        >
-          Potential Savings: {recommendation.savings}
-        </Typography>
+        <Box sx={{ flex: 1, mr: 2 }}>
+          <Typography
+            variant="subtitle2"
+            sx={{
+              color: getColor(),
+              fontWeight: "medium",
+            }}
+          >
+            Potential Savings: {recommendation.savings}
+          </Typography>
+        </Box>
 
         {onImplement && (
           <Button
@@ -182,6 +184,7 @@ function RecommendationCard({ recommendation, onImplement }) {
             }}
             sx={{
               backgroundColor: getColor(),
+              minWidth: 110, // Fixed minimum width
               "&:hover": {
                 backgroundColor: getColor(),
                 opacity: 0.9,

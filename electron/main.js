@@ -133,29 +133,87 @@ ipcMain.handle("read-csv-file", async (event, filePath) => {
 // Import data from CSV
 ipcMain.handle("import-csv-data", async (event, csvData) => {
   try {
-    // Parse CSV data
-    const records = parse(csvData, {
-      columns: true,
-      skip_empty_lines: true,
-    });
+    // Parse CSV data with error handling for each row
+    let records = [];
+    let parseErrors = [];
+
+    try {
+      // First try standard parsing
+      records = parse(csvData, {
+        columns: true,
+        skip_empty_lines: true,
+      });
+    } catch (parseError) {
+      console.error("Error during standard CSV parsing:", parseError);
+
+      // If standard parsing fails, try line-by-line parsing
+      const lines = csvData.split("\n");
+      const headerLine = lines[0];
+      const headers = parse(headerLine, { columns: false })[0];
+
+      // Process each line individually
+      for (let i = 1; i < lines.length; i++) {
+        if (!lines[i].trim()) continue; // Skip empty lines
+
+        try {
+          const parsedLine = parse(lines[i], { columns: false })[0];
+          if (parsedLine && parsedLine.length === headers.length) {
+            // Create object from headers and values
+            const record = {};
+            headers.forEach((header, index) => {
+              record[header] = parsedLine[index];
+            });
+            records.push(record);
+          } else {
+            parseErrors.push({
+              line: i + 1,
+              error: "Invalid column count",
+              content: lines[i],
+            });
+          }
+        } catch (lineError) {
+          parseErrors.push({
+            line: i + 1,
+            error: lineError.message,
+            content: lines[i],
+          });
+        }
+      }
+    }
 
     // Process and store the data
-    const processedRecords = await processImportedData(records);
+    const result = await processImportedData(records);
+
+    // Combine parse errors with processing errors
+    const allErrors = [...parseErrors, ...result.errors];
 
     return {
       success: true,
-      count: processedRecords.length,
-      data: processedRecords,
+      count: result.processedRecords.length,
+      data: result.processedRecords,
+      duplicates: result.duplicates,
+      errors: allErrors,
+      errorCount: allErrors.length,
     };
   } catch (error) {
     console.error("Error importing CSV data:", error);
-    throw error;
+    return {
+      success: false,
+      error: error.message,
+      count: 0,
+      data: [],
+      duplicates: [],
+      errors: [{ error: error.message }],
+      errorCount: 1,
+    };
   }
 });
 
 // Process imported data
 async function processImportedData(records) {
   const processedRecords = [];
+  const errors = [];
+  const duplicates = [];
 
   try {
     // Load graph data for distance calculations
@@ -173,167 +231,266 @@ async function processImportedData(records) {
     // Group records by device ID
     const deviceRecords = {};
 
-    for (const record of records) {
-      const deviceId = record.device || record.Device || "";
-      if (!deviceId) continue;
-
-      if (!deviceRecords[deviceId]) {
-        deviceRecords[deviceId] = [];
-      }
-
-      deviceRecords[deviceId].push(record);
-    }
-
-    // Process each device's records
-    for (const [deviceId, deviceRecs] of Object.entries(deviceRecords)) {
-      const deviceType = deviceId.split("-")[0] || "Unknown";
-
-      // Count how many records have "In Use" status
-      const inUseCount = deviceRecs.filter((rec) =>
-        (rec.status || rec.Status || "").toLowerCase().includes("in use")
-      ).length;
-
-      // Calculate the percentage of time the device is in use
-      const inUsePercentage = Math.round(
-        (inUseCount / deviceRecs.length) * 100
-      );
-
-      // Get the latest status
-      const latestStatus =
-        deviceRecs[deviceRecs.length - 1]?.status ||
-        deviceRecs[deviceRecs.length - 1]?.Status ||
-        "Unknown";
-
-      // Create or update device
-      const device = {
-        deviceId,
-        deviceType,
-        status: latestStatus,
-        lastMaintenance: null,
-        totalUsageHours: 0,
-        currentLocation:
-          deviceRecs[deviceRecs.length - 1]?.location ||
-          deviceRecs[deviceRecs.length - 1]?.Location ||
-          "Unknown",
-        inUseCount,
-        totalCount: deviceRecs.length,
-        usagePercentage: inUsePercentage,
-        metadata: {},
-      };
-
-      // Upsert device
-      await db.devices.update(
-        { deviceId: device.deviceId },
-        { $set: device },
-        { upsert: true }
-      );
-
-      console.log(
-        `Updated device: ${deviceId} with usage: ${inUsePercentage}%`
-      );
-
-      // Sort records by time (if available)
-      deviceRecs.sort((a, b) => {
-        const timeA = a.in || a.In || a.timeIn || "";
-        const timeB = b.in || b.In || b.timeIn || "";
-        return timeA.localeCompare(timeB);
-      });
-
-      // Create movement records by pairing consecutive locations
-      for (let i = 0; i < deviceRecs.length - 1; i++) {
-        const currentRecord = deviceRecs[i];
-        const nextRecord = deviceRecs[i + 1];
-
-        // Get locations
-        const fromLocation =
-          currentRecord.location || currentRecord.Location || "Unknown";
-        const toLocation =
-          nextRecord.location || nextRecord.Location || "Unknown";
-
-        // Skip movements where the device moves from the same room to the same room
-        if (fromLocation === toLocation) {
-          console.log(
-            `Skipping movement for ${deviceId} from ${fromLocation} to ${toLocation} (same location)`
-          );
+    // Track records with missing or invalid data
+    for (let i = 0; i < records.length; i++) {
+      const record = records[i];
+      try {
+        const deviceId = record.device || record.Device || "";
+        if (!deviceId) {
+          errors.push({
+            line: i + 2, // +2 because of 0-indexing and header row
+            error: "Missing device ID",
+            record,
+          });
           continue;
         }
 
-        // Ensure both locations exist in the database
-        for (const loc of [fromLocation, toLocation]) {
-          if (loc !== "Unknown") {
-            const location = {
-              locationId: loc,
-              name: loc,
-              coordinates: [0, 0], // Will be updated from floor plan data
-              metadata: {},
-            };
-
-            await db.locations.update(
-              { locationId: location.locationId },
-              { $set: location },
-              { upsert: true }
-            );
-          }
+        const location = record.location || record.Location || "";
+        if (!location) {
+          errors.push({
+            line: i + 2,
+            error: "Missing location",
+            record,
+          });
+          continue;
         }
 
-        // Calculate distance if graph data is available
-        let distance = 0;
-        if (
-          graphData &&
-          fromLocation !== "Unknown" &&
-          toLocation !== "Unknown"
-        ) {
-          // Look for direct edge
-          const directEdge = graphData.edges.find(
-            (edge) =>
-              (edge[0] === fromLocation && edge[1] === toLocation) ||
-              (edge[0] === toLocation && edge[1] === fromLocation)
-          );
-
-          if (directEdge) {
-            // Round distance to 1 decimal point
-            distance = Math.round(directEdge[2] * 10) / 10;
-          }
+        const timeIn = record.in || record.In || record.timeIn || "";
+        const timeOut = record.out || record.Out || record.timeOut || "";
+        if (!timeIn || !timeOut) {
+          errors.push({
+            line: i + 2,
+            error: "Missing time in or time out",
+            record,
+          });
+          continue;
         }
 
-        // Create movement record
-        const movement = {
-          deviceId,
-          fromLocation,
-          toLocation,
-          timeIn:
-            currentRecord.in ||
-            currentRecord.In ||
-            currentRecord.timeIn ||
-            new Date().toISOString(),
-          timeOut:
-            nextRecord.in ||
-            nextRecord.In ||
-            nextRecord.timeIn ||
-            new Date().toISOString(),
-          status: currentRecord.status || currentRecord.Status || "Unknown",
-          distanceTraveled: distance,
-          createdAt: new Date(),
-        };
+        if (!deviceRecords[deviceId]) {
+          deviceRecords[deviceId] = [];
+        }
 
-        // Insert movement
-        await db.movements.insert(movement);
-
-        processedRecords.push({
-          ...currentRecord,
-          deviceType,
-          fromLocation,
-          toLocation,
-          distanceTraveled: distance,
-          processed: true,
+        deviceRecords[deviceId].push(record);
+      } catch (recordError) {
+        errors.push({
+          line: i + 2,
+          error: `Error processing record: ${recordError.message}`,
+          record,
         });
       }
     }
 
-    return processedRecords;
+    // Process each device's records
+    for (const [deviceId, deviceRecs] of Object.entries(deviceRecords)) {
+      try {
+        const deviceType = deviceId.split("-")[0] || "Unknown";
+
+        // Count how many records have "In Use" status
+        const inUseCount = deviceRecs.filter((rec) =>
+          (rec.status || rec.Status || "").toLowerCase().includes("in use")
+        ).length;
+
+        // Calculate the percentage of time the device is in use
+        const inUsePercentage = Math.round(
+          (inUseCount / deviceRecs.length) * 100
+        );
+
+        // Get the latest status
+        const latestStatus =
+          deviceRecs[deviceRecs.length - 1]?.status ||
+          deviceRecs[deviceRecs.length - 1]?.Status ||
+          "Unknown";
+
+        // Create or update device
+        const device = {
+          deviceId,
+          deviceType,
+          status: latestStatus,
+          lastMaintenance: null,
+          totalUsageHours: 0,
+          currentLocation:
+            deviceRecs[deviceRecs.length - 1]?.location ||
+            deviceRecs[deviceRecs.length - 1]?.Location ||
+            "Unknown",
+          inUseCount,
+          totalCount: deviceRecs.length,
+          usagePercentage: inUsePercentage,
+          metadata: {},
+        };
+
+        // Upsert device
+        await db.devices.update(
+          { deviceId: device.deviceId },
+          { $set: device },
+          { upsert: true }
+        );
+
+        console.log(
+          `Updated device: ${deviceId} with usage: ${inUsePercentage}%`
+        );
+
+        // Sort records by time (if available)
+        deviceRecs.sort((a, b) => {
+          const timeA = a.in || a.In || a.timeIn || "";
+          const timeB = b.in || b.In || b.timeIn || "";
+          return timeA.localeCompare(timeB);
+        });
+
+        // Create movement records by pairing consecutive locations
+        for (let i = 0; i < deviceRecs.length - 1; i++) {
+          const currentRecord = deviceRecs[i];
+          const nextRecord = deviceRecs[i + 1];
+
+          // Get locations
+          const fromLocation =
+            currentRecord.location || currentRecord.Location || "Unknown";
+          const toLocation =
+            nextRecord.location || nextRecord.Location || "Unknown";
+
+          // Skip movements where the device moves from the same room to the same room
+          if (fromLocation === toLocation) {
+            console.log(
+              `Skipping movement for ${deviceId} from ${fromLocation} to ${toLocation} (same location)`
+            );
+            continue;
+          }
+
+          // Check if locations are in the graph data
+          const unknownLocations = [];
+          for (const loc of [fromLocation, toLocation]) {
+            if (loc !== "Unknown") {
+              // Check if location exists in graph data
+              let isKnownLocation = false;
+              if (graphData) {
+                isKnownLocation = graphData.edges.some(
+                  (edge) => edge[0] === loc || edge[1] === loc
+                );
+              }
+
+              const location = {
+                locationId: loc,
+                name: loc,
+                coordinates: [0, 0], // Will be updated from floor plan data
+                metadata: {},
+                isUnknownLocation: !isKnownLocation,
+              };
+
+              if (!isKnownLocation) {
+                unknownLocations.push(loc);
+                console.log(
+                  `Warning: Location ${loc} is not in the graph data`
+                );
+              }
+
+              await db.locations.update(
+                { locationId: location.locationId },
+                { $set: location },
+                { upsert: true }
+              );
+            }
+          }
+
+          // Calculate distance if graph data is available
+          let distance = 0;
+          if (
+            graphData &&
+            fromLocation !== "Unknown" &&
+            toLocation !== "Unknown"
+          ) {
+            // Look for direct edge
+            const directEdge = graphData.edges.find(
+              (edge) =>
+                (edge[0] === fromLocation && edge[1] === toLocation) ||
+                (edge[0] === toLocation && edge[1] === fromLocation)
+            );
+
+            if (directEdge) {
+              // Round distance to 1 decimal point
+              distance = Math.round(directEdge[2] * 10) / 10;
+            }
+          }
+
+          // Create movement record
+          const movement = {
+            deviceId,
+            fromLocation,
+            toLocation,
+            timeIn:
+              currentRecord.in ||
+              currentRecord.In ||
+              currentRecord.timeIn ||
+              new Date().toISOString(),
+            timeOut:
+              nextRecord.in ||
+              nextRecord.In ||
+              nextRecord.timeIn ||
+              new Date().toISOString(),
+            status: currentRecord.status || currentRecord.Status || "Unknown",
+            distanceTraveled: distance,
+            createdAt: new Date(),
+            hasUnknownLocation: unknownLocations.length > 0,
+            unknownLocations:
+              unknownLocations.length > 0 ? unknownLocations : undefined,
+          };
+
+          // Check for duplicate movement
+          const existingMovement = await db.movements.findOne({
+            deviceId,
+            fromLocation,
+            toLocation,
+            timeIn: movement.timeIn,
+            timeOut: movement.timeOut,
+          });
+
+          if (existingMovement) {
+            // This is a duplicate, add to duplicates list
+            duplicates.push({
+              deviceId,
+              fromLocation,
+              toLocation,
+              timeIn: movement.timeIn,
+              timeOut: movement.timeOut,
+            });
+            console.log(
+              `Duplicate movement found for ${deviceId} from ${fromLocation} to ${toLocation}`
+            );
+          } else {
+            // Insert movement
+            await db.movements.insert(movement);
+
+            processedRecords.push({
+              ...currentRecord,
+              deviceType,
+              fromLocation,
+              toLocation,
+              distanceTraveled: distance,
+              processed: true,
+            });
+          }
+        }
+      } catch (deviceError) {
+        // Log the error but continue processing other devices
+        console.error(`Error processing device ${deviceId}:`, deviceError);
+        errors.push({
+          deviceId,
+          error: `Error processing device: ${deviceError.message}`,
+        });
+      }
+    }
+
+    return {
+      processedRecords,
+      duplicates,
+      errors,
+    };
   } catch (error) {
     console.error("Error processing imported data:", error);
-    throw error;
+    // Return partial results instead of throwing
+    return {
+      processedRecords,
+      duplicates,
+      errors: [...errors, { error: `Global error: ${error.message}` }],
+    };
   }
 }
 
@@ -611,33 +768,36 @@ ipcMain.handle("generate-recommendations", async () => {
           )}%, Devices: ${stats.devices.size}`
         );
 
-        // Lower threshold to 50% and removed device count requirement
-        if (utilizationRate > 50) {
+        // Only recommend additional units when utilization is high (above 80%)
+        if (utilizationRate > 80) {
           const additionalUnits = Math.ceil((utilizationRate - 80) / 10);
 
-          recommendationsData.push({
-            type: "purchase",
-            title: `Additional ${deviceType} Units Needed`,
-            description: `${deviceType} equipment is utilized at ${Math.round(
-              utilizationRate
-            )}% capacity. Consider purchasing ${additionalUnits} additional unit(s) to reduce wait times.`,
-            savings: `Improved patient care and reduced wait times`,
-            implemented: false,
-            createdAt: new Date(),
-          });
+          // Only recommend if we actually need additional units
+          if (additionalUnits > 0) {
+            recommendationsData.push({
+              type: "purchase",
+              title: `Additional ${deviceType} Units Needed`,
+              description: `${deviceType} equipment is utilized at ${Math.round(
+                utilizationRate
+              )}% capacity. Consider purchasing ${additionalUnits} additional unit(s) to reduce wait times.`,
+              savings: `Improved patient care and reduced wait times`,
+              implemented: false,
+              createdAt: new Date(),
+            });
+          }
         }
       });
       // 3. Predict maintenance needs
       console.log("Analyzing devices for maintenance needs");
 
-      // Set much lower thresholds for testing
+      // Set realistic maintenance thresholds in hundreds of hours
       const maintenanceThresholds = {
-        Ventilator: 5, // Reduced from 500
-        Ultrasound: 3, // Reduced from 300
-        Defibrillator: 2, // Reduced from 200
-        "IV-Pump": 10, // Reduced from 1000
-        Monitor: 8, // Reduced from 800
-        default: 5, // Reduced from 500
+        Ventilator: 500, // Hours of usage before maintenance is required
+        Ultrasound: 300,
+        Defibrillator: 200,
+        "IV-Pump": 1000,
+        Monitor: 800,
+        default: 500,
       };
 
       // Track total usage hours by device

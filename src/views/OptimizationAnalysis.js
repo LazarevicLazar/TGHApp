@@ -65,12 +65,12 @@ function OptimizationAnalysis() {
 
   // Define maintenance thresholds (same as in electron/main.js)
   const maintenanceThresholds = {
-    Ventilator: 5, // Hours of usage before maintenance is required
-    Ultrasound: 3,
-    Defibrillator: 2,
-    "IV-Pump": 10,
-    Monitor: 8,
-    default: 5,
+    Ventilator: 500, // Hours of usage before maintenance is required
+    Ultrasound: 300,
+    Defibrillator: 200,
+    "IV-Pump": 1000,
+    Monitor: 800,
+    default: 500,
   };
 
   // No initialization with sample data - we'll only use real data from the database
@@ -93,6 +93,10 @@ function OptimizationAnalysis() {
 
     // Set history data from context
     setHistoryData(optimizationHistory || []);
+
+    // Reset individual device progress and device type usage hours
+    // This prevents accumulation of hours across multiple renders
+    setIndividualDeviceProgress({});
 
     // Create some initial data if none exists
     if (
@@ -196,10 +200,13 @@ function OptimizationAnalysis() {
               deviceUtilizationByDevice[deviceId].inUse += duration;
 
               // Track usage hours for maintenance calculation
+              // Using a realistic scaling factor
+              const scalingFactor = 1.0; // 100% of the actual duration - no scaling
               deviceUsageHours[deviceId] =
-                (deviceUsageHours[deviceId] || 0) + duration;
+                (deviceUsageHours[deviceId] || 0) + duration * scalingFactor;
               if (deviceTypeUsageHours[type]) {
-                deviceTypeUsageHours[type].totalHours += duration;
+                deviceTypeUsageHours[type].totalHours +=
+                  duration * scalingFactor;
               }
 
               // Track individual device progress
@@ -218,7 +225,10 @@ function OptimizationAnalysis() {
                   status: "Good",
                 };
               }
-              individualDeviceProgress[type][deviceId].usageHours += duration;
+
+              // Use the same scaling factor defined above
+              individualDeviceProgress[type][deviceId].usageHours +=
+                duration * scalingFactor;
             }
           }
 
@@ -342,7 +352,14 @@ function OptimizationAnalysis() {
       setDeviceEfficiency(efficiency);
       setMaintenanceProgress(maintenance);
     }
-  }, [devices, movements, recommendations, optimizationHistory, totalSavings]);
+  }, [
+    devices,
+    movements,
+    recommendations,
+    optimizationHistory,
+    totalSavings,
+    setIndividualDeviceProgress,
+  ]);
 
   return (
     <Box className="content-container">
@@ -474,48 +491,76 @@ function OptimizationAnalysis() {
                               )}
                             </Box>
                           </Box>
+                          {/* Device bubbles */}
+                          <Box sx={{ mb: 2, mt: 1 }}>
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                              sx={{ mb: 1 }}
+                            >
+                              Device status overview:
+                            </Typography>
+                            <Box
+                              sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}
+                            >
+                              {device.devices &&
+                                device.devices.map(
+                                  (individualDevice, index) => (
+                                    <Box
+                                      key={individualDevice.deviceId}
+                                      sx={{
+                                        width: 20,
+                                        height: 20,
+                                        borderRadius: "50%",
+                                        backgroundColor:
+                                          individualDevice.progressPercentage >=
+                                          100
+                                            ? "#f44336"
+                                            : individualDevice.progressPercentage >=
+                                              80
+                                            ? "#ff9800"
+                                            : "#4caf50",
+                                        display: "flex",
+                                        justifyContent: "center",
+                                        alignItems: "center",
+                                        fontSize: "10px",
+                                        color: "white",
+                                        fontWeight: "bold",
+                                        cursor: "pointer",
+                                        transition: "transform 0.2s",
+                                        "&:hover": {
+                                          transform: "scale(1.2)",
+                                        },
+                                        position: "relative",
+                                      }}
+                                      title={`${
+                                        individualDevice.deviceId
+                                      }: ${Math.round(
+                                        individualDevice.progressPercentage
+                                      )}%`}
+                                    >
+                                      {index + 1}
+                                    </Box>
+                                  )
+                                )}
+                            </Box>
+                          </Box>
+
                           <Box
                             sx={{
                               display: "flex",
-                              alignItems: "center",
-                              mb: 1,
+                              justifyContent: "space-between",
                             }}
                           >
-                            <Box sx={{ width: "100%", mr: 1 }}>
-                              <LinearProgress
-                                variant="determinate"
-                                value={device.progressPercentage}
-                                sx={{
-                                  height: 10,
-                                  borderRadius: 5,
-                                  backgroundColor: "#e0e0e0",
-                                  "& .MuiLinearProgress-bar": {
-                                    backgroundColor:
-                                      device.progressPercentage >= 100
-                                        ? "#f44336"
-                                        : device.progressPercentage >= 80
-                                        ? "#ff9800"
-                                        : "#4caf50",
-                                    borderRadius: 5,
-                                  },
-                                }}
-                              />
-                            </Box>
-                            <Box sx={{ minWidth: 35 }}>
-                              <Typography
-                                variant="body2"
-                                color="text.secondary"
-                              >
-                                {`${Math.round(device.progressPercentage)}%`}
-                              </Typography>
-                            </Box>
+                            <Typography variant="body2" color="text.secondary">
+                              {`Avg: ${device.avgHoursPerDevice} hours / ${device.threshold} hour threshold`}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              {`${Math.round(
+                                device.progressPercentage
+                              )}% of threshold`}
+                            </Typography>
                           </Box>
-                          <Typography variant="body2" color="text.secondary">
-                            {`${device.avgHoursPerDevice} hours / ${device.threshold} hour threshold`}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            Total usage: {device.totalHours} hours
-                          </Typography>
 
                           {/* Individual device progress bars */}
                           {expandedDeviceType === device.type &&

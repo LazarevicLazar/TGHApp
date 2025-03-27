@@ -335,8 +335,27 @@ function DataTable() {
                     }
                   }
 
+                  // Check if this row has unknown locations
+                  const hasUnknownLocation =
+                    getRowValue(row, "hasUnknownLocation") || false;
+                  const unknownLocations =
+                    getRowValue(row, "unknownLocations") || [];
+
                   return (
-                    <TableRow key={row._id || index} hover>
+                    <TableRow
+                      key={row._id || index}
+                      hover
+                      sx={{
+                        backgroundColor: hasUnknownLocation
+                          ? "rgba(255, 0, 0, 0.05)"
+                          : "inherit",
+                        "&:hover": {
+                          backgroundColor: hasUnknownLocation
+                            ? "rgba(255, 0, 0, 0.1)"
+                            : undefined,
+                        },
+                      }}
+                    >
                       <TableCell>
                         <Box sx={{ display: "flex", flexDirection: "column" }}>
                           <Typography variant="body2" fontWeight="bold">
@@ -345,15 +364,68 @@ function DataTable() {
                           <Typography variant="body2" color="text.secondary">
                             {deviceNumber}
                           </Typography>
+                          {hasUnknownLocation && (
+                            <Typography variant="caption" color="error">
+                              Unknown location detected
+                            </Typography>
+                          )}
                         </Box>
                       </TableCell>
                       <TableCell>
-                        {getRowValue(row, "fromLocation") || "Unknown"}
+                        <Typography
+                          sx={{
+                            color:
+                              hasUnknownLocation &&
+                              unknownLocations.includes(
+                                getRowValue(row, "fromLocation")
+                              )
+                                ? "error.main"
+                                : "inherit",
+                          }}
+                        >
+                          {getRowValue(row, "fromLocation") || "Unknown"}
+                          {hasUnknownLocation &&
+                            unknownLocations.includes(
+                              getRowValue(row, "fromLocation")
+                            ) && (
+                              <Typography
+                                variant="caption"
+                                color="error"
+                                display="block"
+                              >
+                                (Not in floor plan)
+                              </Typography>
+                            )}
+                        </Typography>
                       </TableCell>
                       <TableCell>
-                        {getRowValue(row, "toLocation") ||
-                          getRowValue(row, "location") ||
-                          "Unknown"}
+                        <Typography
+                          sx={{
+                            color:
+                              hasUnknownLocation &&
+                              unknownLocations.includes(
+                                getRowValue(row, "toLocation")
+                              )
+                                ? "error.main"
+                                : "inherit",
+                          }}
+                        >
+                          {getRowValue(row, "toLocation") ||
+                            getRowValue(row, "location") ||
+                            "Unknown"}
+                          {hasUnknownLocation &&
+                            unknownLocations.includes(
+                              getRowValue(row, "toLocation")
+                            ) && (
+                              <Typography
+                                variant="caption"
+                                color="error"
+                                display="block"
+                              >
+                                (Not in floor plan)
+                              </Typography>
+                            )}
+                        </Typography>
                       </TableCell>
                       <TableCell>
                         <Box

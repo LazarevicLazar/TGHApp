@@ -304,18 +304,43 @@ export const DataProvider = ({ children }) => {
           setLocations(locationsData);
           setMovements(movementsData);
           setData([...movementsData]);
+
+          // Log information about duplicates and errors
+          if (result.duplicates && result.duplicates.length > 0) {
+            console.log(`Found ${result.duplicates.length} duplicate records`);
+          }
+
+          if (result.errors && result.errors.length > 0) {
+            console.log(`Found ${result.errors.length} records with errors`);
+            console.log("Errors:", result.errors);
+          }
         }
 
         return result;
       } else {
         // For development without Electron
         console.log("Would import CSV data in Electron");
-        return { success: true, count: 10, data: [] };
+        return {
+          success: true,
+          count: 10,
+          data: [],
+          duplicates: [],
+          errors: [],
+          errorCount: 0,
+        };
       }
     } catch (err) {
       console.error("Error importing CSV data:", err);
       setError(err.message);
-      throw err;
+      return {
+        success: false,
+        error: err.message,
+        count: 0,
+        data: [],
+        duplicates: [],
+        errors: [{ error: err.message }],
+        errorCount: 1,
+      };
     } finally {
       setLoading(false);
     }

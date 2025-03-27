@@ -146,18 +146,45 @@ function ImportData() {
                   updatedFiles[i].status = "success";
                   totalRecords += result.count || 0;
                   successfulRecords += result.count || 0;
+
+                  // Track duplicates
+                  if (result.duplicates && result.duplicates.length > 0) {
+                    updatedFiles[i].duplicates = result.duplicates.length;
+                    updatedFiles[
+                      i
+                    ].message = `${result.duplicates.length} duplicate records found`;
+                  }
+
+                  // Track errors
+                  if (result.errors && result.errors.length > 0) {
+                    updatedFiles[i].errors = result.errors.length;
+                    errorRecords += result.errors.length;
+                    updatedFiles[i].message =
+                      (updatedFiles[i].message || "") +
+                      `${result.errors.length} records with errors`;
+                  }
                 } else {
                   updatedFiles[i].status = "error";
-                  errorRecords += 10; // Assume some records failed
+                  const errorCount =
+                    result.errorCount ||
+                    (result.errors ? result.errors.length : 1);
+                  errorRecords += errorCount;
+                  updatedFiles[i].message =
+                    result.error || `${errorCount} records with errors`;
+                  updatedFiles[i].errors = errorCount;
                 }
               } catch (dbError) {
                 console.error("Error importing to database:", dbError);
                 updatedFiles[i].status = "error";
-                errorRecords += 10;
+                errorRecords += 1;
+                updatedFiles[i].message = dbError.message || "Database error";
+                updatedFiles[i].errors = 1;
               }
             } else {
               updatedFiles[i].status = "error";
-              errorRecords += 10; // Assume some records failed
+              errorRecords += 1;
+              updatedFiles[i].message = "Could not read file content";
+              updatedFiles[i].errors = 1;
             }
           } else {
             // For development without Electron
@@ -196,6 +223,14 @@ function ImportData() {
       // Update the files state
       setFiles(updatedFiles);
 
+      // Calculate duplicate records
+      let duplicateRecords = 0;
+      updatedFiles.forEach((file) => {
+        if (file.duplicates) {
+          duplicateRecords += file.duplicates;
+        }
+      });
+
       setImportStats({
         totalFiles: files.length,
         successfulFiles: updatedFiles.filter((f) => f.status === "success")
@@ -204,6 +239,7 @@ function ImportData() {
         totalRecords,
         successfulRecords,
         errorRecords,
+        duplicateRecords,
       });
 
       setActiveStep(2); // Move to review step
@@ -362,11 +398,38 @@ function ImportData() {
                             <ListItemText
                               primary={file.name}
                               secondary={
-                                file.status === "pending"
-                                  ? "Pending"
-                                  : file.status === "success"
-                                  ? "Processed"
-                                  : "Error"
+                                <>
+                                  {file.status === "pending" && "Pending"}
+                                  {file.status === "success" && (
+                                    <>
+                                      Processed
+                                      {file.duplicates > 0 && (
+                                        <Typography
+                                          variant="caption"
+                                          color="warning.main"
+                                          display="block"
+                                        >
+                                          {file.duplicates} duplicate records
+                                          found
+                                        </Typography>
+                                      )}
+                                      {file.errors > 0 && (
+                                        <Typography
+                                          variant="caption"
+                                          color="error"
+                                          display="block"
+                                        >
+                                          {file.errors} records with errors
+                                        </Typography>
+                                      )}
+                                    </>
+                                  )}
+                                  {file.status === "error" && (
+                                    <Typography variant="caption" color="error">
+                                      Error: {file.message || "Unknown error"}
+                                    </Typography>
+                                  )}
+                                </>
                               }
                             />
                             {file.status === "success" && (
@@ -480,9 +543,21 @@ function ImportData() {
                       <Typography variant="body2">
                         Successfully Imported: {importStats.successfulRecords}
                       </Typography>
-                      <Typography variant="body2">
+                      <Typography
+                        variant="body2"
+                        color={
+                          importStats.errorRecords > 0
+                            ? "error.main"
+                            : "text.secondary"
+                        }
+                      >
                         Errors: {importStats.errorRecords}
                       </Typography>
+                      {importStats.duplicateRecords > 0 && (
+                        <Typography variant="body2" color="warning.main">
+                          Duplicates (skipped): {importStats.duplicateRecords}
+                        </Typography>
+                      )}
                     </Grid>
                   </Grid>
                 </Paper>

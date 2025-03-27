@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Grid, Box, CircularProgress } from "@mui/material";
+import { Grid, Box, CircularProgress, Alert, AlertTitle } from "@mui/material";
 import {
   BarChart,
   Bar,
@@ -38,6 +38,7 @@ function Dashboard() {
   const [equipmentStats, setEquipmentStats] = useState(emptyEquipmentData);
   const [locationStats, setLocationStats] = useState(emptyDepartmentData);
   const [displayedRecommendations, setDisplayedRecommendations] = useState([]);
+  const [unknownLocations, setUnknownLocations] = useState([]);
 
   useEffect(() => {
     // Check if we have any data to process
@@ -140,17 +141,29 @@ function Dashboard() {
         equipmentStatsData.length > 0 ? equipmentStatsData : []
       );
 
-      // Process data to generate location stats
+      // Process data to generate location stats and detect unknown locations
       if (movements && movements.length > 0) {
         const locations = {};
+        const unknownLocationSet = new Set();
+
         movements.forEach((movement) => {
           const location = movement.toLocation || "Unknown";
+
+          // Check for unknown locations
+          if (movement.hasUnknownLocation && movement.unknownLocations) {
+            movement.unknownLocations.forEach((loc) =>
+              unknownLocationSet.add(loc)
+            );
+          }
 
           if (!locations[location]) {
             locations[location] = { name: location, value: 0 };
           }
           locations[location].value++;
         });
+
+        // Update unknown locations state
+        setUnknownLocations(Array.from(unknownLocationSet));
 
         // Convert to array and sort
         const locationStatsData = Object.values(locations)
@@ -233,6 +246,14 @@ function Dashboard() {
 
   return (
     <Box className="content-container">
+      {unknownLocations.length > 0 && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          <AlertTitle>Unknown Locations Detected</AlertTitle>
+          The following locations are not found in the floor plan:
+          <strong>{unknownLocations.join(", ")}</strong>. Please check the data
+          table for more details.
+        </Alert>
+      )}
       <Grid container spacing={3}>
         {/* Equipment Usage Chart */}
         <Grid item xs={12} md={6}>
