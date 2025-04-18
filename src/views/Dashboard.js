@@ -17,6 +17,7 @@ import { useDataContext } from "../context/DataContext";
 import DashboardCard from "../components/DashboardCard";
 import RecommendationCard from "../components/RecommendationCard";
 import DeviceMovementChart from "../components/DeviceMovementChart";
+import TimeFilterSelector from "../components/TimeFilterSelector";
 import { getStatusColor } from "../utils/helpers";
 
 // Empty arrays for initial rendering
@@ -30,9 +31,12 @@ function Dashboard() {
     data,
     devices,
     movements,
+    filteredMovements,
     recommendations,
     setRecommendations,
     loading,
+    timeFilter,
+    setTimeFilter,
     generateRecommendations,
     implementRecommendation,
     implementAllRecommendations,
@@ -77,7 +81,7 @@ function Dashboard() {
   useEffect(() => {
     // Check if we have any data to process
     const hasDevices = devices && devices.length > 0;
-    const hasMovements = movements && movements.length > 0;
+    const hasMovements = filteredMovements && filteredMovements.length > 0;
 
     if (hasDevices || hasMovements) {
       // Process data to generate equipment stats for individual devices
@@ -115,13 +119,13 @@ function Dashboard() {
       // If we don't have device data, extract it from movements
       if (
         (!devices || devices.length === 0) &&
-        movements &&
-        movements.length > 0
+        filteredMovements &&
+        filteredMovements.length > 0
       ) {
         // Create a map to track unique devices
         const uniqueDevices = new Map();
 
-        movements.forEach((movement) => {
+        filteredMovements.forEach((movement) => {
           const deviceId = movement.deviceId || "";
           const deviceType = deviceId.split("-")[0] || "Unknown";
           const status = movement.status || "Unknown";
@@ -176,11 +180,11 @@ function Dashboard() {
       );
 
       // Process data to generate location stats and detect unknown locations
-      if (movements && movements.length > 0) {
+      if (filteredMovements && filteredMovements.length > 0) {
         const locations = {};
         const unknownLocationSet = new Set();
 
-        movements.forEach((movement) => {
+        filteredMovements.forEach((movement) => {
           const location = movement.toLocation || "Unknown";
 
           // Check for unknown locations
@@ -219,9 +223,15 @@ function Dashboard() {
 
     // Set recommendations
     if (recommendations && recommendations.length > 0) {
+      console.log("Recommendations received:", recommendations);
       setDisplayedRecommendations(recommendations);
     }
-  }, [devices, movements, recommendations]);
+  }, [devices, filteredMovements, recommendations, timeFilter]);
+
+  // Handle time filter change
+  const handleTimeFilterChange = (newTimeFilter) => {
+    setTimeFilter(newTimeFilter);
+  };
 
   const handleImplementRecommendation = async (recommendation) => {
     try {
@@ -271,6 +281,8 @@ function Dashboard() {
         console.log(
           "Successfully generated new recommendations with updated calculation method"
         );
+        // Log the recommendations to see if they have the correct properties
+        console.log("New recommendations:", recommendations);
       }
     } catch (error) {
       console.error("Error generating recommendations:", error);
@@ -287,6 +299,13 @@ function Dashboard() {
 
   return (
     <Box className="content-container">
+      <Box sx={{ mb: 3 }}>
+        <TimeFilterSelector
+          value={timeFilter}
+          onChange={handleTimeFilterChange}
+          label="Time Period"
+        />
+      </Box>
       {unknownLocations.length > 0 && (
         <Alert severity="warning" sx={{ mb: 3 }}>
           <AlertTitle>Unknown Locations Detected</AlertTitle>
@@ -360,7 +379,7 @@ function Dashboard() {
             loading={loading || !floorPlan}
             infoTooltip="Shows the total distance each device has moved (multiplied by 1.6)"
           >
-            <DeviceMovementChart movements={movements} floorPlan={floorPlan} />
+            <DeviceMovementChart movements={filteredMovements} floorPlan={floorPlan} />
           </DashboardCard>
         </Grid>
 

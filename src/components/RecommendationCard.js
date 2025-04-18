@@ -26,6 +26,12 @@ import {
  */
 function RecommendationCard({ recommendation, onImplement }) {
   const theme = useTheme();
+  
+  // Debug log the recommendation properties
+  console.log("RecommendationCard received:", recommendation);
+  console.log("hoursSaved:", recommendation.hoursSaved, "type:", typeof recommendation.hoursSaved);
+  console.log("distanceSaved:", recommendation.distanceSaved, "type:", typeof recommendation.distanceSaved);
+  console.log("movementsPerMonth:", recommendation.movementsPerMonth, "type:", typeof recommendation.movementsPerMonth);
 
   // Get the appropriate icon based on recommendation type
   const getIcon = () => {
@@ -170,32 +176,86 @@ function RecommendationCard({ recommendation, onImplement }) {
                 fontWeight: "medium",
               }}
             >
-              Potential Savings: {recommendation.savings}
+              Potential Savings: {recommendation.hoursSaved !== undefined
+                ? `~${parseFloat(recommendation.hoursSaved).toFixed(1)} hours/month`
+                : recommendation.savings}
             </Typography>
-            {recommendation.hoursSaved && recommendation.movementsPerMonth && (
-              <Typography
-                variant="caption"
-                sx={{
-                  display: "block",
-                  color: "text.secondary",
-                  mt: 0.5,
-                }}
-              >
-                Based on {Math.round(recommendation.movementsPerMonth)}{" "}
-                movements/month at 3.5 ft/sec walking speed
-              </Typography>
-            )}
-            {recommendation.distanceSaved && (
-              <Typography
-                variant="caption"
-                sx={{
-                  display: "block",
-                  color: "text.secondary",
-                  mt: 0.5,
-                }}
-              >
-                Distance saved: {Math.round(recommendation.distanceSaved)} feet
-              </Typography>
+            {/* Display time savings information */}
+            {recommendation.type === "placement" && (
+              <>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    display: "block",
+                    color: "text.secondary",
+                    mt: 0.5,
+                    fontWeight: "medium",
+                  }}
+                >
+                  Time Savings:
+                </Typography>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    display: "block",
+                    color: "text.secondary",
+                    ml: 1,
+                  }}
+                >
+                  • {parseFloat(recommendation.hoursSaved || 0).toFixed(1)} hours saved per month
+                </Typography>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    display: "block",
+                    color: "text.secondary",
+                    ml: 1,
+                  }}
+                >
+                  • Based on {Math.round(recommendation.movementsPerMonth || 0)} movements/month
+                </Typography>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    display: "block",
+                    color: "text.secondary",
+                    ml: 1,
+                  }}
+                >
+                  • Walking speed: 3.5 feet/second (210 feet/minute)
+                </Typography>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    display: "block",
+                    color: "text.secondary",
+                    mt: 0.5,
+                    fontWeight: "medium",
+                  }}
+                >
+                  Distance Savings:
+                </Typography>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    display: "block",
+                    color: "text.secondary",
+                    ml: 1,
+                  }}
+                >
+                  • {Math.round(recommendation.distanceSaved || 0)} feet per movement
+                </Typography>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    display: "block",
+                    color: "text.secondary",
+                    ml: 1,
+                  }}
+                >
+                  • {Math.round(recommendation.percentImprovement || 0)}% reduction in walking distance
+                </Typography>
+              </>
             )}
           </Box>
         </Box>

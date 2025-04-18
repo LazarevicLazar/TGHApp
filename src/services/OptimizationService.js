@@ -44,12 +44,17 @@ class OptimizationService {
    * @returns {Array} Optimization recommendations
    */
   optimizeWalkingDistance(movements) {
+    console.log("optimizeWalkingDistance called with", movements.length, "movements");
+    console.log("Graph data available:", !!this.graphData);
+    console.log("Graph object available:", !!this.graph);
+    
     if (
       !this.graphData ||
       !this.graph ||
       !movements ||
       movements.length === 0
     ) {
+      console.log("Missing required data, returning empty recommendations");
       return [];
     }
 
@@ -84,22 +89,32 @@ class OptimizationService {
         }
       });
 
+      console.log("Processed", Object.keys(deviceMap).length, "unique devices");
+
       // Analyze each device
       Object.entries(deviceMap).forEach(([deviceId, equipment]) => {
+        console.log("Analyzing device:", deviceId, "with", equipment.usageHistory.length, "usage records");
+        
         // Skip if not enough usage history
-        if (equipment.usageHistory.length < 3) return;
+        if (equipment.usageHistory.length < 3) {
+          console.log("Skipping device with insufficient usage history:", deviceId);
+          return;
+        }
 
         // Find optimal storage location
         const result = findOptimalStorageLocation(equipment, this.graph);
+        console.log("Optimization result for", deviceId, ":", result);
 
         // Only recommend if there's a significant improvement
         if (
           result.percentImprovement > 10 &&
-          result.currentLocation !== result.optimalLocation
+          result.currentLocation !== result.optimalLocation &&
+          result.hoursSaved > 0
         ) {
+          console.log("Creating recommendation for", deviceId);
           const deviceType = deviceId.split("-")[0] || "Unknown";
 
-          recommendations.push({
+          const recommendation = {
             _id: `walking_${deviceId}_${Date.now()}`,
             type: "placement",
             title: `Optimize ${deviceType} Placement`,
@@ -109,23 +124,30 @@ class OptimizationService {
               result.optimalLocation
             } would reduce staff walking distance by approximately ${Math.round(
               result.percentImprovement
-            )}% (${Math.round(result.distanceSaved)} feet).`,
-            savings: `~${result.hoursSaved.toFixed(
+            )}% (${Math.round(result.distanceSaved)} feet) and save ~${parseFloat(result.hoursSaved || 0).toFixed(1)} hours/month.`,
+            savings: `~${parseFloat(result.hoursSaved || 0).toFixed(
               1
             )} hours/month based on ${Math.round(
-              result.movementsPerMonth
+              result.movementsPerMonth || 0
             )} movements/month`,
             implemented: false,
             createdAt: new Date().toISOString(),
             deviceId: deviceId,
             currentLocation: result.currentLocation,
             optimalLocation: result.optimalLocation,
-            distanceSaved: Math.round(result.distanceSaved),
-            hoursSaved: result.hoursSaved,
-            movementsPerMonth: result.movementsPerMonth,
-          });
+            distanceSaved: Math.round(result.distanceSaved || 0),
+            hoursSaved: parseFloat(result.hoursSaved || 0),
+            movementsPerMonth: parseFloat(result.movementsPerMonth || 0),
+          };
+          
+          console.log("Created recommendation:", recommendation);
+          recommendations.push(recommendation);
+        } else {
+          console.log("No significant improvement for", deviceId, "- not creating recommendation");
         }
       });
+      
+      console.log("Generated", recommendations.length, "walking distance recommendations");
     } catch (error) {
       console.error("Error in walking distance optimization:", error);
     }
@@ -334,6 +356,9 @@ class OptimizationService {
             createdAt: new Date().toISOString(),
             deviceId: deviceId,
             metrics: metrics,
+            hoursSaved: 0,
+            distanceSaved: 0,
+            movementsPerMonth: 0,
           });
         }
 
@@ -473,6 +498,9 @@ class OptimizationService {
             hoursUsed: Math.round(maintenanceResult.hoursUsed),
             threshold: maintenanceResult.threshold,
             urgencyLevel: maintenanceResult.urgencyLevel,
+            hoursSaved: 0,
+            distanceSaved: 0,
+            movementsPerMonth: 0,
           });
         }
       });
@@ -498,6 +526,7 @@ class OptimizationService {
     try {
       // Walking distance optimization
       const walkingRecs = this.optimizeWalkingDistance(movements);
+      console.log("Walking distance recommendations:", walkingRecs);
       recommendations.push(...walkingRecs);
 
       // Utilization analysis
@@ -509,13 +538,18 @@ class OptimizationService {
       recommendations.push(...maintenanceRecs);
 
       // Sort by type and creation date
-      return recommendations.sort((a, b) => {
+      const sortedRecommendations = recommendations.sort((a, b) => {
         if (a.type !== b.type) {
           const typeOrder = { placement: 1, purchase: 2, maintenance: 3 };
           return typeOrder[a.type] - typeOrder[b.type];
         }
         return new Date(b.createdAt) - new Date(a.createdAt);
       });
+      
+      // Log the final recommendations
+      console.log("Final recommendations:", sortedRecommendations);
+      
+      return sortedRecommendations;
     } catch (error) {
       console.error("Error generating recommendations:", error);
       return [];

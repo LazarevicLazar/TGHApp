@@ -20,15 +20,21 @@ import {
 } from "@mui/material";
 import { useDataContext } from "../context/DataContext";
 import MetricCard from "../components/MetricCard";
+import TimeFilterSelector from "../components/TimeFilterSelector";
 
 function OptimizationAnalysis() {
   const {
     devices,
     locations,
     movements,
+    filteredMovements,
     recommendations,
     optimizationHistory,
+    filteredOptimizationHistory,
     totalSavings,
+    filteredTotalSavings,
+    timeFilter,
+    setTimeFilter,
     setOptimizationHistory,
     setTotalSavings,
   } = useDataContext();
@@ -52,9 +58,9 @@ function OptimizationAnalysis() {
   ]);
 
   const [savingsSummary, setSavingsSummary] = useState({
-    totalHoursSaved: totalSavings?.hours || 0,
-    totalMoneySaved: totalSavings?.money || 0,
-    implementedOptimizations: optimizationHistory?.length || 0,
+    totalHoursSaved: filteredTotalSavings?.hours || 0,
+    totalMoneySaved: filteredTotalSavings?.money || 0,
+    implementedOptimizations: filteredOptimizationHistory?.length || 0,
     pendingOptimizations: recommendations?.length || 0,
   });
   const [historyData, setHistoryData] = useState([]);
@@ -78,21 +84,22 @@ function OptimizationAnalysis() {
   // Update savings summary when data changes
   useEffect(() => {
     console.log("Optimization data:", {
-      totalSavings,
-      optimizationHistory,
+      filteredTotalSavings,
+      filteredOptimizationHistory,
       recommendations,
+      timeFilter
     });
 
     // Update the savings summary from context data
     setSavingsSummary({
-      totalHoursSaved: totalSavings?.hours || 0,
-      totalMoneySaved: totalSavings?.money || 0,
-      implementedOptimizations: optimizationHistory?.length || 0,
+      totalHoursSaved: parseFloat(filteredTotalSavings?.hours || 0),
+      totalMoneySaved: parseFloat(filteredTotalSavings?.money || 0),
+      implementedOptimizations: filteredOptimizationHistory?.length || 0,
       pendingOptimizations: recommendations?.length || 0,
     });
 
     // Set history data from context
-    setHistoryData(optimizationHistory || []);
+    setHistoryData(filteredOptimizationHistory || []);
 
     // Reset individual device progress and device type usage hours
     // This prevents accumulation of hours across multiple renders
@@ -100,13 +107,13 @@ function OptimizationAnalysis() {
 
     // Create some initial data if none exists
     if (
-      (!optimizationHistory || optimizationHistory.length === 0) &&
-      (!totalSavings || (totalSavings.hours === 0 && totalSavings.money === 0))
+      (!filteredOptimizationHistory || filteredOptimizationHistory.length === 0) &&
+      (!filteredTotalSavings || (filteredTotalSavings.hours === 0 && filteredTotalSavings.money === 0))
     ) {
       // Initialize with some default values for display purposes
       setSavingsSummary({
-        totalHoursSaved: 0,
-        totalMoneySaved: 0,
+        totalHoursSaved: 0.0,
+        totalMoneySaved: 0.0,
         implementedOptimizations: 0,
         pendingOptimizations: recommendations?.length || 0,
       });
@@ -120,7 +127,7 @@ function OptimizationAnalysis() {
     const deviceUsageHours = {};
     const deviceTypeUsageHours = {};
 
-    if (devices && devices.length > 0) {
+    if (devices && devices.length > 0 && filteredMovements && filteredMovements.length > 0) {
       // Group devices by type
       const deviceTypes = {};
       devices.forEach((device) => {
@@ -165,12 +172,12 @@ function OptimizationAnalysis() {
       });
 
       // Calculate utilization and travel distance
-      if (movements && movements.length > 0) {
+      if (filteredMovements && filteredMovements.length > 0) {
         // Track by individual device first
         const deviceUtilizationByDevice = {};
         const deviceTravel = {};
 
-        movements.forEach((movement) => {
+        filteredMovements.forEach((movement) => {
           if (!movement.deviceId) return;
 
           const deviceId = movement.deviceId;
@@ -354,15 +361,28 @@ function OptimizationAnalysis() {
     }
   }, [
     devices,
-    movements,
+    filteredMovements,
     recommendations,
-    optimizationHistory,
-    totalSavings,
+    filteredOptimizationHistory,
+    filteredTotalSavings,
+    timeFilter,
     setIndividualDeviceProgress,
   ]);
 
+  // Handle time filter change
+  const handleTimeFilterChange = (newTimeFilter) => {
+    setTimeFilter(newTimeFilter);
+  };
+
   return (
     <Box className="content-container">
+      <Box sx={{ mb: 3 }}>
+        <TimeFilterSelector
+          value={timeFilter}
+          onChange={handleTimeFilterChange}
+          label="Time Period"
+        />
+      </Box>
       <Grid container spacing={3}>
         <Grid item xs={12}>
           <Alert severity="info">
@@ -375,8 +395,8 @@ function OptimizationAnalysis() {
         <Grid item xs={12} md={6}>
           <MetricCard
             title="Total Staff Hours Saved"
-            value={`${savingsSummary.totalHoursSaved.toFixed(1)} hours`}
-            description="Cumulative time saved through optimizations"
+            value={`${parseFloat(savingsSummary.totalHoursSaved).toFixed(1)} hours`}
+            description="Cumulative time saved through optimizations based on walking distance"
             icon="AccessTime"
           />
         </Grid>
@@ -384,8 +404,8 @@ function OptimizationAnalysis() {
         <Grid item xs={12} md={6}>
           <MetricCard
             title="Total Cost Savings"
-            value={`$${savingsSummary.totalMoneySaved.toLocaleString()}`}
-            description="Estimated financial impact of optimizations"
+            value={`$${parseFloat(savingsSummary.totalMoneySaved).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`}
+            description="Estimated financial impact at $50/hour labor cost"
             icon="AttachMoney"
           />
         </Grid>
