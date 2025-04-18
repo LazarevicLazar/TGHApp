@@ -162,15 +162,42 @@ function RecommendationCard({ recommendation, onImplement }) {
         }}
       >
         <Box sx={{ flex: 1, mr: 2 }}>
-          <Typography
-            variant="subtitle2"
-            sx={{
-              color: getColor(),
-              fontWeight: "medium",
-            }}
-          >
-            Potential Savings: {recommendation.savings}
-          </Typography>
+          <Box>
+            <Typography
+              variant="subtitle2"
+              sx={{
+                color: getColor(),
+                fontWeight: "medium",
+              }}
+            >
+              Potential Savings: {recommendation.savings}
+            </Typography>
+            {recommendation.hoursSaved && recommendation.movementsPerMonth && (
+              <Typography
+                variant="caption"
+                sx={{
+                  display: "block",
+                  color: "text.secondary",
+                  mt: 0.5,
+                }}
+              >
+                Based on {Math.round(recommendation.movementsPerMonth)}{" "}
+                movements/month at 3.5 ft/sec walking speed
+              </Typography>
+            )}
+            {recommendation.distanceSaved && (
+              <Typography
+                variant="caption"
+                sx={{
+                  display: "block",
+                  color: "text.secondary",
+                  mt: 0.5,
+                }}
+              >
+                Distance saved: {Math.round(recommendation.distanceSaved)} feet
+              </Typography>
+            )}
+          </Box>
         </Box>
 
         {onImplement && (

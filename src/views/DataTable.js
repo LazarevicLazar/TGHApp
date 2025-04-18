@@ -451,7 +451,7 @@ function DataTable() {
                   direction={orderBy === "distanceTraveled" ? order : "asc"}
                   onClick={() => handleRequestSort("distanceTraveled")}
                 >
-                  Distance
+                  Distance (feet)
                 </TableSortLabel>
               </TableCell>
             </TableRow>
@@ -600,9 +600,18 @@ function DataTable() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {getRowValue(row, "distanceTraveled") ||
-                          getRowValue(row, "distance") ||
-                          "0"}
+                        {(() => {
+                          const distance =
+                            getRowValue(row, "distanceTraveled") ||
+                            getRowValue(row, "distance") ||
+                            "0";
+                          // Apply 1.6 multiplier if it's a number
+                          if (!isNaN(parseFloat(distance))) {
+                            const distanceValue = parseFloat(distance) * 1.6;
+                            return distanceValue.toFixed(2);
+                          }
+                          return distance;
+                        })()}
                       </TableCell>
                     </TableRow>
                   );

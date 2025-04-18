@@ -140,7 +140,160 @@ export const getStatusColor = (status) => {
  * @returns {number} Distance between the points
  */
 export const calculateDistance = (x1, y1, x2, y2) => {
-  return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+  // Calculate the Euclidean distance and multiply by 1.6 to convert to feet
+  return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2)) * 1.6;
+};
+
+/**
+ * Find the distance between two rooms using the graph data
+ * @param {string} fromRoom - The starting room ID
+ * @param {string} toRoom - The destination room ID
+ * @param {Object} graphData - The graph data containing nodes and edges
+ * @returns {number|null} The distance between rooms or null if no path exists
+ */
+export const findRoomDistance = (fromRoom, toRoom, graphData) => {
+  if (!graphData || !graphData.nodes || !graphData.edges) {
+    console.error("Invalid graph data provided");
+    return null;
+  }
+
+  // If rooms are the same, distance is 0
+  if (fromRoom === toRoom) {
+    return 0;
+  }
+
+  // Check if there's a direct edge between the rooms
+  for (const edge of graphData.edges) {
+    if (
+      (edge[0] === fromRoom && edge[1] === toRoom) ||
+      (edge[0] === toRoom && edge[1] === fromRoom)
+    ) {
+      return edge[2] * 1.6; // Return the distance multiplied by 1.6 to convert to feet
+    }
+  }
+
+  // If no direct edge, we would need to implement a shortest path algorithm
+  // For simplicity, we'll return null for now
+  // In a real implementation, you would use Dijkstra's algorithm or similar
+  console.log(`No direct path found between ${fromRoom} and ${toRoom}`);
+  return null;
+};
+
+/**
+ * Build an adjacency list from graph data for efficient path finding
+ * @param {Object} graphData - The graph data containing nodes and edges
+ * @returns {Object} An adjacency list representation of the graph
+ */
+export const buildAdjacencyList = (graphData) => {
+  if (!graphData || !graphData.nodes || !graphData.edges) {
+    console.error("Invalid graph data provided");
+    return {};
+  }
+
+  const adjacencyList = {};
+
+  // Initialize empty adjacency lists for all nodes
+  graphData.nodes.forEach((node) => {
+    adjacencyList[node] = [];
+  });
+
+  // Add edges to the adjacency list
+  graphData.edges.forEach((edge) => {
+    const [from, to, distance] = edge;
+    adjacencyList[from].push({ node: to, distance });
+    adjacencyList[to].push({ node: from, distance }); // Assuming undirected graph
+  });
+
+  return adjacencyList;
+};
+
+/**
+ * Find the shortest path between two rooms using Dijkstra's algorithm
+ * @param {string} fromRoom - The starting room ID
+ * @param {string} toRoom - The destination room ID
+ * @param {Object} graphData - The graph data containing nodes and edges
+ * @returns {Object} Object containing the distance and path
+ */
+export const findShortestPath = (fromRoom, toRoom, graphData) => {
+  if (!graphData || !graphData.nodes || !graphData.edges) {
+    console.error("Invalid graph data provided");
+    return { distance: null, path: [] };
+  }
+
+  // If rooms are the same, distance is 0
+  if (fromRoom === toRoom) {
+    return { distance: 0, path: [fromRoom] };
+  }
+
+  // Build adjacency list
+  const adjacencyList = buildAdjacencyList(graphData);
+
+  // Set up distances and previous nodes
+  const distances = {};
+  const previous = {};
+  const unvisited = new Set(graphData.nodes);
+
+  // Initialize distances
+  graphData.nodes.forEach((node) => {
+    distances[node] = Infinity;
+  });
+  distances[fromRoom] = 0;
+
+  // Main Dijkstra algorithm
+  while (unvisited.size > 0) {
+    // Find the unvisited node with the smallest distance
+    let current = null;
+    let smallestDistance = Infinity;
+
+    unvisited.forEach((node) => {
+      if (distances[node] < smallestDistance) {
+        smallestDistance = distances[node];
+        current = node;
+      }
+    });
+
+    // If we've reached the destination or there's no path
+    if (
+      current === toRoom ||
+      current === null ||
+      distances[current] === Infinity
+    ) {
+      break;
+    }
+
+    // Remove current from unvisited
+    unvisited.delete(current);
+
+    // Check each neighbor
+    adjacencyList[current].forEach((neighbor) => {
+      if (unvisited.has(neighbor.node)) {
+        const tentativeDistance = distances[current] + neighbor.distance;
+
+        if (tentativeDistance < distances[neighbor.node]) {
+          distances[neighbor.node] = tentativeDistance;
+          previous[neighbor.node] = current;
+        }
+      }
+    });
+  }
+
+  // Build the path
+  const path = [];
+  let current = toRoom;
+
+  // If there's no path to the destination
+  if (distances[toRoom] === Infinity) {
+    return { distance: null, path: [] };
+  }
+
+  // Reconstruct the path
+  while (current) {
+    path.unshift(current);
+    current = previous[current];
+  }
+
+  // Multiply the final distance by 1.6 to convert to feet
+  return { distance: distances[toRoom] * 1.6, path };
 };
 
 /**

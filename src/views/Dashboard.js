@@ -16,6 +16,7 @@ import {
 import { useDataContext } from "../context/DataContext";
 import DashboardCard from "../components/DashboardCard";
 import RecommendationCard from "../components/RecommendationCard";
+import DeviceMovementChart from "../components/DeviceMovementChart";
 import { getStatusColor } from "../utils/helpers";
 
 // Empty arrays for initial rendering
@@ -30,6 +31,7 @@ function Dashboard() {
     devices,
     movements,
     recommendations,
+    setRecommendations,
     loading,
     generateRecommendations,
     implementRecommendation,
@@ -39,6 +41,38 @@ function Dashboard() {
   const [locationStats, setLocationStats] = useState(emptyDepartmentData);
   const [displayedRecommendations, setDisplayedRecommendations] = useState([]);
   const [unknownLocations, setUnknownLocations] = useState([]);
+  const [floorPlan, setFloorPlan] = useState(null);
+
+  // Load floor plan data
+  useEffect(() => {
+    const loadFloorPlan = async () => {
+      try {
+        // Try both paths to handle different environments
+        let response;
+        try {
+          response = await fetch("/floor_plan_progress.json");
+          if (!response.ok) {
+            throw new Error("Not found at root path");
+          }
+        } catch (error) {
+          // Try alternative path
+          console.log("Trying alternative path for floor plan");
+          response = await fetch("./floor_plan_progress.json");
+          if (!response.ok) {
+            throw new Error(`Failed to load floor plan: ${response.status}`);
+          }
+        }
+
+        const data = await response.json();
+        console.log("Floor plan loaded successfully:", data);
+        setFloorPlan(data);
+      } catch (error) {
+        console.error("Error loading floor plan:", error);
+      }
+    };
+
+    loadFloorPlan();
+  }, []);
 
   useEffect(() => {
     // Check if we have any data to process
@@ -224,12 +258,19 @@ function Dashboard() {
 
   const handleGenerateRecommendations = async () => {
     try {
+      // Clear existing recommendations first to ensure we get fresh ones with the new calculation
+      setRecommendations([]);
+
       const result = await generateRecommendations();
 
       if (result && !result.success) {
         // Show error message
         console.error("Failed to generate recommendations:", result.message);
         // You could add a snackbar or other UI element to show the error message
+      } else {
+        console.log(
+          "Successfully generated new recommendations with updated calculation method"
+        );
       }
     } catch (error) {
       console.error("Error generating recommendations:", error);
@@ -312,6 +353,17 @@ function Dashboard() {
           </DashboardCard>
         </Grid>
 
+        {/* Device Movement Chart */}
+        <Grid item xs={12}>
+          <DashboardCard
+            title="Device Movement Distance"
+            loading={loading || !floorPlan}
+            infoTooltip="Shows the total distance each device has moved (multiplied by 1.6)"
+          >
+            <DeviceMovementChart movements={movements} floorPlan={floorPlan} />
+          </DashboardCard>
+        </Grid>
+
         {/* Recommendations */}
         <Grid item xs={12}>
           <DashboardCard
@@ -360,7 +412,7 @@ function Dashboard() {
                     },
                   }}
                 >
-                  Generate Recommendations
+                  Regenerate Recommendations
                 </Box>
               </Box>
             }

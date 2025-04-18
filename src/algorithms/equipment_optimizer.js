@@ -192,6 +192,8 @@ function findOptimalStorageLocation(equipment, graph) {
     optimalLocation: bestRoom,
     distanceSaved: savings.saved,
     percentImprovement: savings.percentChange,
+    hoursSaved: savings.hoursSaved,
+    movementsPerMonth: savings.movementsPerMonth,
     minDistance,
   };
 }
@@ -226,7 +228,7 @@ function computeTotalDistance(graph, sourceRoom, targets) {
 function calculateDistanceSavings(equipment, graph, newStorageLocation) {
   const currentStorage = equipment.getStorageLocation();
   if (!currentStorage || currentStorage === newStorageLocation)
-    return { saved: 0, percentChange: 0 };
+    return { saved: 0, percentChange: 0, hoursSaved: 0, movementsPerMonth: 0 };
 
   const originalPath = [];
   const modifiedPath = [];
@@ -245,7 +247,37 @@ function calculateDistanceSavings(equipment, graph, newStorageLocation) {
   const percentChange =
     originalDistance > 0 ? (saved / originalDistance) * 100 : 0;
 
-  return { saved, percentChange };
+  // Calculate time saved based on walking speed
+  const AVERAGE_WALKING_SPEED_FPS = 3.5; // feet per second
+  const SECONDS_TO_HOURS = 1 / 3600; // conversion factor
+
+  // Calculate time saved per movement in hours
+  const timeSavedPerMovement =
+    (saved / AVERAGE_WALKING_SPEED_FPS) * SECONDS_TO_HOURS;
+
+  // Estimate movements per month based on usage history
+  const usageDates = equipment.usageHistory.map(
+    (entry) => new Date(entry[2]).toISOString().split("T")[0]
+  );
+  const uniqueDates = new Set(usageDates);
+  const dateRange =
+    usageDates.length > 0
+      ? (new Date(Math.max(...usageDates.map((d) => new Date(d)))) -
+          new Date(Math.min(...usageDates.map((d) => new Date(d))))) /
+        (1000 * 60 * 60 * 24)
+      : 1;
+
+  // Calculate movements per day, then scale to month
+  const movementsPerDay =
+    uniqueDates.size > 0
+      ? equipment.usageHistory.length / Math.max(dateRange, 1)
+      : 0;
+  const movementsPerMonth = movementsPerDay * 30;
+
+  // Total hours saved per month
+  const hoursSaved = timeSavedPerMovement * movementsPerMonth;
+
+  return { saved, percentChange, hoursSaved, movementsPerMonth };
 }
 
 /**

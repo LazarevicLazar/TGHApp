@@ -109,16 +109,20 @@ class OptimizationService {
               result.optimalLocation
             } would reduce staff walking distance by approximately ${Math.round(
               result.percentImprovement
-            )}%.`,
-            savings: `~${Math.round(
-              result.percentImprovement * 2
-            )} hours/month`,
+            )}% (${Math.round(result.distanceSaved)} feet).`,
+            savings: `~${result.hoursSaved.toFixed(
+              1
+            )} hours/month based on ${Math.round(
+              result.movementsPerMonth
+            )} movements/month`,
             implemented: false,
             createdAt: new Date().toISOString(),
             deviceId: deviceId,
             currentLocation: result.currentLocation,
             optimalLocation: result.optimalLocation,
             distanceSaved: Math.round(result.distanceSaved),
+            hoursSaved: result.hoursSaved,
+            movementsPerMonth: result.movementsPerMonth,
           });
         }
       });

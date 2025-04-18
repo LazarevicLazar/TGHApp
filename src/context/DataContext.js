@@ -7,8 +7,8 @@ const DataContext = createContext();
 const parseHoursSaved = (savingsString) => {
   if (!savingsString) return 0;
 
-  // Try to extract hours from strings like "~120 hours/month"
-  const hoursMatch = savingsString.match(/(\d+)\s*hours/i);
+  // Try to extract hours from strings like "~5.2 hours/month based on 15 movements/month"
+  const hoursMatch = savingsString.match(/~?(\d+\.?\d*)\s*hours/i);
   if (hoursMatch && hoursMatch[1]) {
     return parseFloat(hoursMatch[1]);
   }
@@ -83,14 +83,110 @@ export const DataProvider = ({ children }) => {
           // Set combined data for backward compatibility
           setData([...movementsData]);
         } else {
-          // For development without Electron, use empty arrays
-          console.log("Running in development mode, using empty data");
+          // For development without Electron, load sample data from CSV
+          console.log("Running in development mode, loading sample data");
 
-          setDevices([]);
-          setLocations([]);
-          setMovements([]);
-          setRecommendations([]);
-          setData([]);
+          try {
+            // Load sample data from CSV file
+            const loadSampleData = async () => {
+              try {
+                const response = await fetch("/sample_data.csv");
+                if (!response.ok) {
+                  throw new Error(
+                    `Failed to load sample data: ${response.status}`
+                  );
+                }
+
+                const csvText = await response.text();
+                const lines = csvText
+                  .split("\n")
+                  .filter((line) => line.trim() && !isNaN(line.charAt(0)));
+
+                // Parse CSV data
+                const sampleMovements = lines.map((line) => {
+                  const [Device, Location, Status, In, Out] = line.split(",");
+                  return {
+                    deviceId: Device,
+                    Location,
+                    Status,
+                    In,
+                    Out,
+                    // Add these fields for compatibility with our visualization
+                    fromLocation: null, // Will be calculated in sequence
+                    toLocation: Location,
+                  };
+                });
+
+                // Process movements to add fromLocation based on previous movement
+                const deviceMovements = {};
+                sampleMovements.forEach((movement) => {
+                  const deviceId = movement.deviceId;
+                  if (!deviceMovements[deviceId]) {
+                    deviceMovements[deviceId] = [];
+                  }
+                  deviceMovements[deviceId].push(movement);
+                });
+
+                // Sort by time and set fromLocation
+                Object.values(deviceMovements).forEach((movements) => {
+                  movements.sort((a, b) => new Date(a.In) - new Date(b.In));
+
+                  for (let i = 1; i < movements.length; i++) {
+                    movements[i].fromLocation = movements[i - 1].Location;
+                  }
+                });
+
+                // Flatten back to array
+                const processedMovements =
+                  Object.values(deviceMovements).flat();
+
+                console.log(
+                  `Loaded ${processedMovements.length} sample movements`
+                );
+                setMovements(processedMovements);
+                setData(processedMovements);
+
+                // Extract unique devices
+                const uniqueDevices = [
+                  ...new Set(processedMovements.map((m) => m.deviceId)),
+                ];
+                const devicesData = uniqueDevices.map((deviceId) => ({
+                  deviceId,
+                  deviceType: deviceId.split("-")[0],
+                  status: "Available",
+                }));
+
+                setDevices(devicesData);
+
+                // Extract unique locations
+                const uniqueLocations = [
+                  ...new Set(processedMovements.map((m) => m.Location)),
+                ];
+                const locationsData = uniqueLocations.map((name) => ({ name }));
+
+                setLocations(locationsData);
+                setRecommendations([]);
+              } catch (error) {
+                console.error("Error loading sample data:", error);
+                // Fallback to empty arrays
+                setDevices([]);
+                setLocations([]);
+                setMovements([]);
+                setRecommendations([]);
+                setData([]);
+              }
+            };
+
+            loadSampleData();
+          } catch (error) {
+            console.error("Error in sample data loading:", error);
+            // Fallback to empty arrays
+            setDevices([]);
+            setLocations([]);
+            setMovements([]);
+            setRecommendations([]);
+            setData([]);
+          }
         }
       } catch (err) {
         console.error("Error loading data:", err);
@@ -122,7 +218,7 @@ export const DataProvider = ({ children }) => {
         }
       } else {
         // For development without Electron
-        console.log("Would generate recommendations in Electron");
+        console.log("Generating recommendations using OptimizationService");
 
         // Check if there's any data
         if (devices.length === 0 || movements.length === 0) {
@@ -133,43 +229,95 @@ export const DataProvider = ({ children }) => {
           };
         }
 
-        // Create sample recommendations
-        const newRecommendations = [
-          {
-            _id: `rec_${Date.now()}_1`,
-            type: "placement",
-            title: "New Ventilator Placement",
-            description:
-              "Moving ventilators from ICU storage to Emergency Department would reduce staff walking distance by approximately 15%.",
-            savings: "~120 hours/month",
-            implemented: false,
-            createdAt: new Date().toISOString(),
-          },
-          {
-            _id: `rec_${Date.now()}_2`,
-            type: "purchase",
-            title: "New IV Pumps Needed",
-            description:
-              "Current IV pumps are utilized at 90% capacity. Adding 5 more units would reduce wait times and improve patient care.",
-            savings: "~$15,000/year",
-            implemented: false,
-            createdAt: new Date().toISOString(),
-          },
-          {
-            _id: `rec_${Date.now()}_3`,
-            type: "maintenance",
-            title: "New Maintenance Schedule",
-            description:
-              "Ultrasound machines in Radiology are approaching maintenance thresholds based on usage patterns.",
-            savings: "Preventative maintenance",
-            implemented: false,
-            createdAt: new Date().toISOString(),
-          },
-        ];
+        try {
+          // Import OptimizationService
+          const optimizationService =
+            require("../services/OptimizationService").default;
 
-        // Set the new recommendations (replacing any existing ones)
-        setRecommendations(newRecommendations);
-        return { success: true };
+          // Load graph data
+          let graphData = null;
+          try {
+            const response = await fetch("/graph_data.json");
+            if (response.ok) {
+              graphData = await response.json();
+              console.log("Graph data loaded successfully for recommendations");
+            }
+          } catch (error) {
+            console.error("Error loading graph data:", error);
+          }
+
+          // Load floor plan data
+          let floorPlanData = null;
+          try {
+            const response = await fetch("/floor_plan_progress.json");
+            if (response.ok) {
+              floorPlanData = await response.json();
+              console.log(
+                "Floor plan data loaded successfully for recommendations"
+              );
+            }
+          } catch (error) {
+            console.error("Error loading floor plan data:", error);
+          }
+
+          // Initialize the optimization service with the graph and floor plan data
+          optimizationService.initialize(graphData, floorPlanData);
+
+          // Generate recommendations using the optimization service
+          const generatedRecommendations =
+            optimizationService.generateRecommendations(movements);
+
+          if (generatedRecommendations && generatedRecommendations.length > 0) {
+            console.log(
+              `Generated ${generatedRecommendations.length} recommendations with updated calculation method`
+            );
+            setRecommendations(generatedRecommendations);
+            return { success: true };
+          } else {
+            // Fallback to sample recommendations if no recommendations were generated
+            const newRecommendations = [
+              {
+                _id: `rec_${Date.now()}_1`,
+                type: "placement",
+                title: "New Ventilator Placement",
+                description:
+                  "Moving ventilators from ICU storage to Emergency Department would reduce staff walking distance by approximately 15%.",
+                savings: "~120 hours/month",
+                hoursSaved: 120,
+                implemented: false,
+                createdAt: new Date().toISOString(),
+              },
+              {
+                _id: `rec_${Date.now()}_2`,
+                type: "purchase",
+                title: "New IV Pumps Needed",
+                description:
+                  "Current IV pumps are utilized at 90% capacity. Adding 5 more units would reduce wait times and improve patient care.",
+                savings: "~$15,000/year",
+                implemented: false,
+                createdAt: new Date().toISOString(),
+              },
+              {
+                _id: `rec_${Date.now()}_3`,
+                type: "maintenance",
+                title: "New Maintenance Schedule",
+                description:
+                  "Ultrasound machines in Radiology are approaching maintenance thresholds based on usage patterns.",
+                savings: "Preventative maintenance",
+                implemented: false,
+                createdAt: new Date().toISOString(),
+              },
+            ];
+
+            console.log("Falling back to sample recommendations");
+            setRecommendations(newRecommendations);
+            return { success: true };
+          }
+        } catch (error) {
+          console.error("Error generating recommendations:", error);
+          setError("Failed to generate recommendations: " + error.message);
+          return { success: false, message: error.message };
+        }
       }
     } catch (err) {
       console.error("Error generating recommendations:", err);
@@ -206,7 +354,9 @@ export const DataProvider = ({ children }) => {
             type: recommendation.type,
             description: recommendation.description,
             impact: recommendation.savings,
-            hoursSaved: parseHoursSaved(recommendation.savings),
+            hoursSaved:
+              recommendation.hoursSaved ||
+              parseHoursSaved(recommendation.savings),
             deviceId: recommendation.deviceId,
             implemented: true,
           };
@@ -222,7 +372,9 @@ export const DataProvider = ({ children }) => {
           );
 
           // Update total savings
-          const hoursSaved = parseHoursSaved(recommendation.savings);
+          const hoursSaved =
+            recommendation.hoursSaved ||
+            parseHoursSaved(recommendation.savings);
           setTotalSavings((prev) => ({
             hours: prev.hours + hoursSaved,
             money: prev.money + hoursSaved * 50, // $50 per hour
@@ -248,7 +400,9 @@ export const DataProvider = ({ children }) => {
           type: recommendation.type,
           description: recommendation.description,
           impact: recommendation.savings,
-          hoursSaved: parseHoursSaved(recommendation.savings),
+          hoursSaved:
+            recommendation.hoursSaved ||
+            parseHoursSaved(recommendation.savings),
           deviceId: recommendation.deviceId,
           implemented: true,
         };
@@ -418,7 +572,9 @@ export const DataProvider = ({ children }) => {
             type: recommendation.type,
             description: recommendation.description,
             impact: recommendation.savings,
-            hoursSaved: parseHoursSaved(recommendation.savings),
+            hoursSaved:
+              recommendation.hoursSaved ||
+              parseHoursSaved(recommendation.savings),
             deviceId: recommendation.deviceId,
             implemented: true,
           }));
@@ -460,7 +616,9 @@ export const DataProvider = ({ children }) => {
           type: recommendation.type,
           description: recommendation.description,
           impact: recommendation.savings,
-          hoursSaved: parseHoursSaved(recommendation.savings),
+          hoursSaved:
+            recommendation.hoursSaved ||
+            parseHoursSaved(recommendation.savings),
           deviceId: recommendation.deviceId,
           implemented: true,
         }));
