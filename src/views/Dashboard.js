@@ -300,20 +300,20 @@ function Dashboard() {
   return (
     <Box className="content-container">
       <Box sx={{ mb: 3 }}>
+        {unknownLocations.length > 0 && (
+          <Alert severity="warning" sx={{ mb: 3 }}>
+            <AlertTitle>Unknown Locations Detected</AlertTitle>
+            The following locations are not found in the floor plan:
+            <strong>{unknownLocations.join(", ")}</strong>. Please check the
+            data table for more details.
+          </Alert>
+        )}
         <TimeFilterSelector
           value={timeFilter}
           onChange={handleTimeFilterChange}
           label="Time Period"
         />
       </Box>
-      {unknownLocations.length > 0 && (
-        <Alert severity="warning" sx={{ mb: 3 }}>
-          <AlertTitle>Unknown Locations Detected</AlertTitle>
-          The following locations are not found in the floor plan:
-          <strong>{unknownLocations.join(", ")}</strong>. Please check the data
-          table for more details.
-        </Alert>
-      )}
       <Grid container spacing={3}>
         {/* Equipment Usage Chart */}
         <Grid item xs={12} md={6}>
@@ -379,7 +379,10 @@ function Dashboard() {
             loading={loading || !floorPlan}
             infoTooltip="Shows the total distance each device has moved (multiplied by 1.6)"
           >
-            <DeviceMovementChart movements={filteredMovements} floorPlan={floorPlan} />
+            <DeviceMovementChart
+              movements={filteredMovements}
+              floorPlan={floorPlan}
+            />
           </DashboardCard>
         </Grid>
 

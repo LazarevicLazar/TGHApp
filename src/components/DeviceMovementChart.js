@@ -45,6 +45,7 @@ const DeviceMovementChart = ({ movements, floorPlan }) => {
   const [roomOptions, setRoomOptions] = useState([]);
   const [deviceMovementDetails, setDeviceMovementDetails] = useState([]);
   const [refreshKey, setRefreshKey] = useState(0); // Add a refresh key to force re-render
+  const [sortOrder, setSortOrder] = useState("default"); // default, mostToLeast, leastToMost
 
   // Load graph data
   useEffect(() => {
@@ -257,10 +258,19 @@ const DeviceMovementChart = ({ movements, floorPlan }) => {
 
     console.log("Processed movement data:", deviceMovements);
 
-    // Convert to array and sort by device type and then by device ID
-    const movementDataArray = Object.values(deviceMovements)
-      .filter((device) => device.totalDistance > 0) // Only include devices with movement
-      .sort((a, b) => {
+    // Convert to array
+    let movementDataArray = Object.values(deviceMovements).filter(
+      (device) => device.totalDistance > 0
+    ); // Only include devices with movement
+
+    // Apply sorting based on sortOrder
+    if (sortOrder === "mostToLeast") {
+      movementDataArray.sort((a, b) => b.totalDistance - a.totalDistance);
+    } else if (sortOrder === "leastToMost") {
+      movementDataArray.sort((a, b) => a.totalDistance - b.totalDistance);
+    } else {
+      // Default sorting by device type and then by device ID
+      movementDataArray.sort((a, b) => {
         // First sort by device type
         if (a.deviceType !== b.deviceType) {
           return a.deviceType.localeCompare(b.deviceType);
@@ -268,6 +278,7 @@ const DeviceMovementChart = ({ movements, floorPlan }) => {
         // Then sort by device ID
         return a.deviceId.localeCompare(b.deviceId);
       });
+    }
 
     // Sort detailed movements by device ID and time
     const sortedDetailedMovements = detailedMovements.sort((a, b) => {
@@ -280,11 +291,76 @@ const DeviceMovementChart = ({ movements, floorPlan }) => {
     console.log("Final movement data for chart:", movementDataArray);
     setMovementData(movementDataArray);
     setDeviceMovementDetails(sortedDetailedMovements);
-  }, [movements, floorPlan, graphData, refreshKey]);
+  }, [movements, floorPlan, graphData, refreshKey, sortOrder]);
 
   // Handle tab change
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
+  };
+
+  // Handle sort order change
+  const handleSortOrderChange = (newSortOrder) => {
+    setSortOrder(newSortOrder);
+  };
+
+  // Export data to Excel (CSV format)
+  const exportToExcel = () => {
+    if (!movementData || movementData.length === 0) {
+      console.log("No data to export");
+      return;
+    }
+
+    // Create CSV content
+    let csvContent =
+      "Device ID,Device Type,Total Distance (feet),Movement Count\n";
+
+    movementData.forEach((device) => {
+      csvContent += `${device.deviceId},${
+        device.deviceType
+      },${device.totalDistance.toFixed(2)},${device.movementCount}\n`;
+    });
+
+    // Create a blob and download link
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", "device_movement_data.csv");
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Export detailed movement data to Excel
+  const exportDetailedToExcel = () => {
+    if (!deviceMovementDetails || deviceMovementDetails.length === 0) {
+      console.log("No detailed data to export");
+      return;
+    }
+
+    // Create CSV content
+    let csvContent =
+      "Device ID,From Location,To Location,Distance (feet),Source,Time In,Time Out\n";
+
+    deviceMovementDetails.forEach((movement) => {
+      csvContent += `${movement.deviceId},${movement.fromLocation},${
+        movement.toLocation
+      },${movement.distance !== null ? movement.distance.toFixed(2) : "N/A"},${
+        movement.distanceSource
+      },${movement.timeIn},${movement.timeOut}\n`;
+    });
+
+    // Create a blob and download link
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", "device_movement_details.csv");
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   // Find path between rooms
@@ -312,84 +388,223 @@ const DeviceMovementChart = ({ movements, floorPlan }) => {
     <Box>
       <Tabs value={tabValue} onChange={handleTabChange} sx={{ mb: 2 }}>
         <Tab label="Device Movement Chart" />
+        <Tab label="Movement Table" />
         <Tab label="Movement Details" />
         <Tab label="Room Distance Calculator" />
       </Tabs>
 
       {tabValue === 0 && (
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart
-            data={movementData}
-            margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-          >
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="deviceId" />
-            <YAxis
-              label={{
-                value: "Total Distance (feet)",
-                angle: -90,
-                position: "insideLeft",
-                style: { textAnchor: "middle" },
-              }}
-            />
-            <Tooltip
-              formatter={(value) => [
-                `${value.toFixed(2)} feet`,
-                "Total Distance",
-              ]}
-              labelFormatter={(value) => `Device: ${value}`}
-            />
-            <Legend />
-            <Bar
-              dataKey="totalDistance"
-              name="Total Movement Distance (feet)"
-              fill="#8884d8"
-            />
-          </BarChart>
-        </ResponsiveContainer>
+        <>
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
+            <Box sx={{ display: "flex", alignItems: "center" }}>
+              <Typography variant="body2" sx={{ mr: 2 }}>
+                Sort by:
+              </Typography>
+              <Button
+                variant={sortOrder === "default" ? "contained" : "outlined"}
+                size="small"
+                onClick={() => handleSortOrderChange("default")}
+                sx={{ mr: 1 }}
+              >
+                Default
+              </Button>
+              <Button
+                variant={sortOrder === "mostToLeast" ? "contained" : "outlined"}
+                size="small"
+                onClick={() => handleSortOrderChange("mostToLeast")}
+                sx={{ mr: 1 }}
+              >
+                Most to Least
+              </Button>
+              <Button
+                variant={sortOrder === "leastToMost" ? "contained" : "outlined"}
+                size="small"
+                onClick={() => handleSortOrderChange("leastToMost")}
+              >
+                Least to Most
+              </Button>
+            </Box>
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={exportToExcel}
+              startIcon={
+                <Box component="span" sx={{ fontSize: "1.2rem" }}>
+                  📊
+                </Box>
+              }
+            >
+              Export to Excel
+            </Button>
+          </Box>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart
+              data={movementData}
+              margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="deviceId" />
+              <YAxis
+                label={{
+                  value: "Total Distance (feet)",
+                  angle: -90,
+                  position: "insideLeft",
+                  style: { textAnchor: "middle" },
+                }}
+              />
+              <Tooltip
+                formatter={(value) => [
+                  `${value.toFixed(2)} feet`,
+                  "Total Distance",
+                ]}
+                labelFormatter={(value) => `Device: ${value}`}
+              />
+              <Legend />
+              <Bar
+                dataKey="totalDistance"
+                name="Total Movement Distance (feet)"
+                fill="#8884d8"
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </>
       )}
 
       {tabValue === 1 && (
-        <TableContainer component={Paper} sx={{ maxHeight: 400 }}>
-          <Table
-            stickyHeader
-            aria-label="device movement details table"
-            size="small"
-          >
-            <TableHead>
-              <TableRow>
-                <TableCell>Device ID</TableCell>
-                <TableCell>From Location</TableCell>
-                <TableCell>To Location</TableCell>
-                <TableCell align="right">Distance (feet)</TableCell>
-                <TableCell>Source</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {deviceMovementDetails.map((row, index) => (
-                <TableRow key={index}>
-                  <TableCell>{row.deviceId}</TableCell>
-                  <TableCell>{row.fromLocation}</TableCell>
-                  <TableCell>{row.toLocation}</TableCell>
-                  <TableCell align="right">
-                    {row.distance !== null ? row.distance.toFixed(2) : "N/A"}
-                  </TableCell>
-                  <TableCell>{row.distanceSource}</TableCell>
-                </TableRow>
-              ))}
-              {deviceMovementDetails.length === 0 && (
+        <>
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
+            <Box sx={{ display: "flex", alignItems: "center" }}>
+              <Typography variant="body2" sx={{ mr: 2 }}>
+                Sort by:
+              </Typography>
+              <Button
+                variant={sortOrder === "default" ? "contained" : "outlined"}
+                size="small"
+                onClick={() => handleSortOrderChange("default")}
+                sx={{ mr: 1 }}
+              >
+                Default
+              </Button>
+              <Button
+                variant={sortOrder === "mostToLeast" ? "contained" : "outlined"}
+                size="small"
+                onClick={() => handleSortOrderChange("mostToLeast")}
+                sx={{ mr: 1 }}
+              >
+                Most to Least
+              </Button>
+              <Button
+                variant={sortOrder === "leastToMost" ? "contained" : "outlined"}
+                size="small"
+                onClick={() => handleSortOrderChange("leastToMost")}
+              >
+                Least to Most
+              </Button>
+            </Box>
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={exportToExcel}
+              startIcon={
+                <Box component="span" sx={{ fontSize: "1.2rem" }}>
+                  📊
+                </Box>
+              }
+            >
+              Export to Excel
+            </Button>
+          </Box>
+          <TableContainer component={Paper} sx={{ maxHeight: 400 }}>
+            <Table stickyHeader aria-label="device movement table" size="small">
+              <TableHead>
                 <TableRow>
-                  <TableCell colSpan={5} align="center">
-                    No movement details available
-                  </TableCell>
+                  <TableCell>Device ID</TableCell>
+                  <TableCell>Device Type</TableCell>
+                  <TableCell align="right">Total Distance (feet)</TableCell>
+                  <TableCell align="right">Movement Count</TableCell>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+              </TableHead>
+              <TableBody>
+                {movementData.map((row, index) => (
+                  <TableRow key={index}>
+                    <TableCell>{row.deviceId}</TableCell>
+                    <TableCell>{row.deviceType}</TableCell>
+                    <TableCell align="right">
+                      {row.totalDistance.toFixed(2)}
+                    </TableCell>
+                    <TableCell align="right">{row.movementCount}</TableCell>
+                  </TableRow>
+                ))}
+                {movementData.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={4} align="center">
+                      No movement data available
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </>
       )}
 
       {tabValue === 2 && (
+        <>
+          <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={exportDetailedToExcel}
+              startIcon={
+                <Box component="span" sx={{ fontSize: "1.2rem" }}>
+                  📊
+                </Box>
+              }
+            >
+              Export to Excel
+            </Button>
+          </Box>
+          <TableContainer component={Paper} sx={{ maxHeight: 400 }}>
+            <Table
+              stickyHeader
+              aria-label="device movement details table"
+              size="small"
+            >
+              <TableHead>
+                <TableRow>
+                  <TableCell>Device ID</TableCell>
+                  <TableCell>From Location</TableCell>
+                  <TableCell>To Location</TableCell>
+                  <TableCell align="right">Distance (feet)</TableCell>
+                  <TableCell>Source</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {deviceMovementDetails.map((row, index) => (
+                  <TableRow key={index}>
+                    <TableCell>{row.deviceId}</TableCell>
+                    <TableCell>{row.fromLocation}</TableCell>
+                    <TableCell>{row.toLocation}</TableCell>
+                    <TableCell align="right">
+                      {row.distance !== null ? row.distance.toFixed(2) : "N/A"}
+                    </TableCell>
+                    <TableCell>{row.distanceSource}</TableCell>
+                  </TableRow>
+                ))}
+                {deviceMovementDetails.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center">
+                      No movement details available
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </>
+      )}
+
+      {tabValue === 3 && (
         <Box>
           <Grid container spacing={2} sx={{ mb: 2 }}>
             <Grid item xs={12} sm={5}>

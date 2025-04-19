@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import TimeFilterSelector from "../components/TimeFilterSelector";
 import {
   Box,
   Card,
@@ -18,7 +19,15 @@ import { useDataContext } from "../context/DataContext";
 import optimizationService from "../services/OptimizationService";
 
 function HeatMap() {
-  const { devices, locations, movements, loading } = useDataContext();
+  const {
+    devices,
+    locations,
+    movements,
+    filteredMovements,
+    loading,
+    timeFilter,
+    setTimeFilter,
+  } = useDataContext();
   const [floorPlan, setFloorPlan] = useState(null);
   const [visualizationType, setVisualizationType] = useState("heatmap");
   const [selectedDevice, setSelectedDevice] = useState("All");
@@ -100,8 +109,8 @@ function HeatMap() {
         const heatmapData = [];
         const locationCounts = {};
 
-        if (movements && movements.length > 0) {
-          movements.forEach((movement) => {
+        if (filteredMovements && filteredMovements.length > 0) {
+          filteredMovements.forEach((movement) => {
             const location = movement.toLocation;
             if (location) {
               if (!locationCounts[location]) {
@@ -125,11 +134,11 @@ function HeatMap() {
         // Generate movement data based on movements
         const movementLines = [];
 
-        if (movements && movements.length > 0) {
+        if (filteredMovements && filteredMovements.length > 0) {
           // Group movements by from/to pairs
           const movementCounts = {};
 
-          movements.forEach((movement) => {
+          filteredMovements.forEach((movement) => {
             const from = movement.fromLocation;
             const to = movement.toLocation;
             const device = movement.deviceId;
@@ -167,7 +176,7 @@ function HeatMap() {
     };
 
     loadFloorPlanData();
-  }, [movements]);
+  }, [filteredMovements]);
 
   // Extract device options from devices
   useEffect(() => {
@@ -249,14 +258,18 @@ function HeatMap() {
     // Create a group for the heat visualization
     const heatGroup = mainGroup.append("g").attr("class", "heat-group");
 
-    if (visualizationType === "heatmap" && movements && movements.length > 0) {
+    if (
+      visualizationType === "heatmap" &&
+      filteredMovements &&
+      filteredMovements.length > 0
+    ) {
       // Generate heat map data points based on actual movement data
       const heatData = [];
       const movementCounts = {};
       let maxMovementCount = 0;
 
       // Count movements per location
-      movements.forEach((movement) => {
+      filteredMovements.forEach((movement) => {
         const location = movement.toLocation;
         if (location) {
           movementCounts[location] = (movementCounts[location] || 0) + 1;
@@ -526,7 +539,7 @@ function HeatMap() {
         }
       });
     }
-  }, [floorPlan, visualizationType, selectedDevice, movements]);
+  }, [floorPlan, visualizationType, selectedDevice, filteredMovements]);
 
   // Render visualization when data changes
   useEffect(() => {
@@ -579,6 +592,13 @@ function HeatMap() {
 
   return (
     <Box className="content-container">
+      <Box sx={{ mb: 3 }}>
+        <TimeFilterSelector
+          value={timeFilter}
+          onChange={setTimeFilter}
+          label="Time Period"
+        />
+      </Box>
       <Grid container spacing={3}>
         <Grid item xs={12}>
           <Paper sx={{ p: 2, display: "flex", gap: 2 }}>
