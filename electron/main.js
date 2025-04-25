@@ -209,6 +209,44 @@ ipcMain.handle("import-csv-data", async (event, csvData) => {
   }
 });
 
+// Set to track names that can't be determined using normalizeLocationName function
+const unknownLocationNames = new Set();
+
+// Normalize location names to a standard format
+function normalizeLocationName(device, location) {
+  const fallbackNames = {
+    // INSERT FALLBACK NAMES HERE AS THEY ARISE
+
+    "Emergency Department, POD 4 West Nurses Station": "K2415",
+    "Emergency Department, POD 5 West Nurses Station": "K2513",
+    "Emergency Department, POD 5 East Nurses Station": "K2511",
+    "Emergency Department, ED POD 2 Nurses Station": "K2216",
+    "Emergency Department, ED POD 3 Nurses Station": "K2316",
+  }
+
+  const kPattern = /K\d{4}[A-Z]?/;
+  const digitPattern = /\b(\d{4})\b/;
+
+  const texts = [device, location];
+
+  for (const text of texts) {
+    const match = text.match(kPattern);
+    if(match) return match[0];
+  }
+
+  for (const text of texts) {
+    const match = text.match(digitPattern);
+    if(match) return "K" + match[1];
+  }
+
+  // If no match found, add to unknown location names set
+  if (!fallbackNames[location]) {
+    unknownLocationNames.add(location);
+  }
+
+  return fallbackNames[location] || "UNKNOWN LOCATION";
+}
+
 // Process imported data
 async function processImportedData(records) {
   const processedRecords = [];
@@ -246,6 +284,8 @@ async function processImportedData(records) {
         }
 
         const location = record.location || record.Location || "";
+        const normalizedLocation = normalizeLocationName(deviceId, location);
+        record.normalizedLocation = normalizedLocation; 
         if (!location) {
           errors.push({
             line: i + 2,
@@ -308,10 +348,7 @@ async function processImportedData(records) {
           status: latestStatus,
           lastMaintenance: null,
           totalUsageHours: 0,
-          currentLocation:
-            deviceRecs[deviceRecs.length - 1]?.location ||
-            deviceRecs[deviceRecs.length - 1]?.Location ||
-            "Unknown",
+          currentLocation: deviceRecs[deviceRecs.length - 1]?.normalizedLocation || "Unknown",
           inUseCount,
           totalCount: deviceRecs.length,
           usagePercentage: inUsePercentage,
@@ -343,9 +380,9 @@ async function processImportedData(records) {
 
           // Get locations
           const fromLocation =
-            currentRecord.location || currentRecord.Location || "Unknown";
+            currentRecord.normalizedLocation || "Unknown";
           const toLocation =
-            nextRecord.location || nextRecord.Location || "Unknown";
+            nextRecord.normalizedLocation || "Unknown";
 
           // Skip movements where the device moves from the same room to the same room
           if (fromLocation === toLocation) {
@@ -476,6 +513,11 @@ async function processImportedData(records) {
           error: `Error processing device: ${deviceError.message}`,
         });
       }
+    }
+
+    // Log unknown location names
+    if (unknownLocationNames.size > 0) {
+      console.log("Unknown location names:", Array.from(unknownLocationNames));
     }
 
     return {
