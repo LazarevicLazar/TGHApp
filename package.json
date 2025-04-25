@@ -21,6 +21,7 @@
     "@mui/icons-material": "^5.11.16",
     "@mui/material": "^5.12.0",
     "csv-parse": "^5.3.6",
+    "csv-parser": "^3.2.0",
     "d3": "^7.8.4",
     "electron-store": "^8.1.0",
     "nedb-promises": "^6.2.1",

@@ -26,12 +26,27 @@ import {
  */
 function RecommendationCard({ recommendation, onImplement }) {
   const theme = useTheme();
-  
+
   // Debug log the recommendation properties
   console.log("RecommendationCard received:", recommendation);
-  console.log("hoursSaved:", recommendation.hoursSaved, "type:", typeof recommendation.hoursSaved);
-  console.log("distanceSaved:", recommendation.distanceSaved, "type:", typeof recommendation.distanceSaved);
-  console.log("movementsPerMonth:", recommendation.movementsPerMonth, "type:", typeof recommendation.movementsPerMonth);
+  console.log(
+    "hoursSaved:",
+    recommendation.hoursSaved,
+    "type:",
+    typeof recommendation.hoursSaved
+  );
+  console.log(
+    "distanceSaved:",
+    recommendation.distanceSaved,
+    "type:",
+    typeof recommendation.distanceSaved
+  );
+  console.log(
+    "movementsPerMonth:",
+    recommendation.movementsPerMonth,
+    "type:",
+    typeof recommendation.movementsPerMonth
+  );
 
   // Get the appropriate icon based on recommendation type
   const getIcon = () => {
@@ -176,87 +191,134 @@ function RecommendationCard({ recommendation, onImplement }) {
                 fontWeight: "medium",
               }}
             >
-              Potential Savings: {recommendation.hoursSaved !== undefined
-                ? `~${parseFloat(recommendation.hoursSaved).toFixed(1)} hours/month`
+              Potential Savings:{" "}
+              {recommendation.hoursSaved !== undefined
+                ? `~${parseFloat(recommendation.hoursSaved).toFixed(
+                    1
+                  )} hours/month`
                 : recommendation.savings}
             </Typography>
             {/* Display time savings information */}
-            {recommendation.type === "placement" && (
-              <>
-                <Typography
-                  variant="caption"
-                  sx={{
-                    display: "block",
-                    color: "text.secondary",
-                    mt: 0.5,
-                    fontWeight: "medium",
-                  }}
-                >
-                  Time Savings:
-                </Typography>
-                <Typography
-                  variant="caption"
-                  sx={{
-                    display: "block",
-                    color: "text.secondary",
-                    ml: 1,
-                  }}
-                >
-                  • {parseFloat(recommendation.hoursSaved || 0).toFixed(1)} hours saved per month
-                </Typography>
-                <Typography
-                  variant="caption"
-                  sx={{
-                    display: "block",
-                    color: "text.secondary",
-                    ml: 1,
-                  }}
-                >
-                  • Based on {Math.round(recommendation.movementsPerMonth || 0)} movements/month
-                </Typography>
-                <Typography
-                  variant="caption"
-                  sx={{
-                    display: "block",
-                    color: "text.secondary",
-                    ml: 1,
-                  }}
-                >
-                  • Walking speed: 3.5 feet/second (210 feet/minute)
-                </Typography>
-                <Typography
-                  variant="caption"
-                  sx={{
-                    display: "block",
-                    color: "text.secondary",
-                    mt: 0.5,
-                    fontWeight: "medium",
-                  }}
-                >
-                  Distance Savings:
-                </Typography>
-                <Typography
-                  variant="caption"
-                  sx={{
-                    display: "block",
-                    color: "text.secondary",
-                    ml: 1,
-                  }}
-                >
-                  • {Math.round(recommendation.distanceSaved || 0)} feet per movement
-                </Typography>
-                <Typography
-                  variant="caption"
-                  sx={{
-                    display: "block",
-                    color: "text.secondary",
-                    ml: 1,
-                  }}
-                >
-                  • {Math.round(recommendation.percentImprovement || 0)}% reduction in walking distance
-                </Typography>
-              </>
-            )}
+            {recommendation.type === "placement" &&
+              recommendation.hoursSaved > 0 &&
+              recommendation.distanceSaved > 0 &&
+              recommendation.movementsPerMonth > 0 && (
+                <>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      display: "block",
+                      color: "text.secondary",
+                      mt: 0.5,
+                      fontWeight: "medium",
+                    }}
+                  >
+                    Time Savings:
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      display: "block",
+                      color: "text.secondary",
+                      ml: 1,
+                    }}
+                  >
+                    • {parseFloat(recommendation.hoursSaved).toFixed(1)} hours
+                    saved per month
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      display: "block",
+                      color: "text.secondary",
+                      ml: 1,
+                    }}
+                  >
+                    • Based on {Math.round(recommendation.movementsPerMonth)}{" "}
+                    movements/month
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      display: "block",
+                      color: "text.secondary",
+                      ml: 1,
+                    }}
+                  >
+                    • Walking speed: 3.5 feet/second (210 feet/minute)
+                  </Typography>
+                  {recommendation.currentTotalDistance > 0 &&
+                    recommendation.optimalTotalDistance > 0 && (
+                      <>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            display: "block",
+                            color: "text.secondary",
+                            mt: 0.5,
+                            fontWeight: "medium",
+                          }}
+                        >
+                          Distance Metrics:
+                        </Typography>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            display: "block",
+                            color: "text.secondary",
+                            ml: 1,
+                          }}
+                        >
+                          • Current Location:{" "}
+                          {Math.round(recommendation.currentTotalDistance)} feet
+                          total distance
+                        </Typography>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            display: "block",
+                            color: "text.secondary",
+                            ml: 1,
+                          }}
+                        >
+                          • Optimal Location:{" "}
+                          {Math.round(recommendation.optimalTotalDistance)} feet
+                          total distance
+                        </Typography>
+                        {recommendation.bestOverallLocation && (
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              display: "block",
+                              color: "text.secondary",
+                              ml: 1,
+                            }}
+                          >
+                            • Best Overall Location (
+                            {recommendation.bestOverallLocation}):{" "}
+                            {Math.round(
+                              recommendation.overallTotalDistance || 0
+                            )}{" "}
+                            feet
+                          </Typography>
+                        )}
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            display: "block",
+                            color: "text.secondary",
+                            ml: 1,
+                          }}
+                        >
+                          • Distance Saved:{" "}
+                          {Math.round(recommendation.distanceSaved)} feet (
+                          {Math.round(recommendation.percentImprovement)}%
+                          reduction)
+                        </Typography>
+                      </>
+                    )}
+                </>
+              )}
           </Box>
         </Box>
 

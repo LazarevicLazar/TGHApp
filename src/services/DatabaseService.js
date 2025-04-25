@@ -11,14 +11,14 @@ class DatabaseService {
    */
   async initialize() {
     try {
-      // In Electron, this would initialize the database
-      // Here we're just checking if the electron bridge is available
       if (window.electron) {
         console.log("Database service initialized");
         return true;
       } else {
-        console.log("Running in development mode, using mock database");
-        return true;
+        console.error(
+          "Electron bridge not available. Database operations will not work."
+        );
+        return false;
       }
     } catch (error) {
       console.error("Error initializing database:", error);
@@ -36,9 +36,11 @@ class DatabaseService {
       if (window.electron) {
         return await window.electron.importCsvData(data);
       } else {
-        // Mock implementation for development
-        console.log("Would import", data.length, "records in Electron");
-        return { success: true, count: data.length };
+        console.error("Electron bridge not available. Cannot import CSV data.");
+        return {
+          success: false,
+          message: "Electron bridge not available. Cannot import CSV data.",
+        };
       }
     } catch (error) {
       console.error("Error importing from CSV:", error);
@@ -55,7 +57,7 @@ class DatabaseService {
       if (window.electron) {
         return await window.electron.getDevices();
       } else {
-        // Mock implementation for development
+        console.error("Electron bridge not available. Cannot get devices.");
         return [];
       }
     } catch (error) {
@@ -73,7 +75,7 @@ class DatabaseService {
       if (window.electron) {
         return await window.electron.getLocations();
       } else {
-        // Mock implementation for development
+        console.error("Electron bridge not available. Cannot get locations.");
         return [];
       }
     } catch (error) {
@@ -91,7 +93,7 @@ class DatabaseService {
       if (window.electron) {
         return await window.electron.getMovements();
       } else {
-        // Mock implementation for development
+        console.error("Electron bridge not available. Cannot get movements.");
         return [];
       }
     } catch (error) {
@@ -109,7 +111,9 @@ class DatabaseService {
       if (window.electron) {
         return await window.electron.getRecommendations();
       } else {
-        // Mock implementation for development
+        console.error(
+          "Electron bridge not available. Cannot get recommendations."
+        );
         return [];
       }
     } catch (error) {
@@ -127,19 +131,14 @@ class DatabaseService {
       if (window.electron) {
         return await window.electron.generateRecommendations();
       } else {
-        // Mock implementation for development
-        return [
-          {
-            _id: `rec_${Date.now()}`,
-            type: "placement",
-            title: "Optimize Ventilator Placement",
-            description:
-              "Moving ventilators from ICU storage to Emergency Department would reduce staff walking distance by approximately 15%.",
-            savings: "~120 hours/month",
-            implemented: false,
-            createdAt: new Date().toISOString(),
-          },
-        ];
+        console.error(
+          "Electron bridge not available. Cannot generate recommendations."
+        );
+        return {
+          success: false,
+          message:
+            "Electron bridge not available. Cannot generate recommendations.",
+        };
       }
     } catch (error) {
       console.error("Error generating recommendations:", error);
@@ -157,9 +156,14 @@ class DatabaseService {
       if (window.electron) {
         return await window.electron.implementRecommendation(recommendationId);
       } else {
-        // Mock implementation for development
-        console.log("Would implement recommendation:", recommendationId);
-        return { success: true, numRemoved: 1 };
+        console.error(
+          "Electron bridge not available. Cannot implement recommendation."
+        );
+        return {
+          success: false,
+          message:
+            "Electron bridge not available. Cannot implement recommendation.",
+        };
       }
     } catch (error) {
       console.error("Error implementing recommendation:", error);
@@ -176,9 +180,11 @@ class DatabaseService {
       if (window.electron) {
         return await window.electron.resetDatabase();
       } else {
-        // Mock implementation for development
-        console.log("Would reset database in Electron");
-        return { success: true, message: "Database reset (mock)" };
+        console.error("Electron bridge not available. Cannot reset database.");
+        return {
+          success: false,
+          message: "Electron bridge not available. Cannot reset database.",
+        };
       }
     } catch (error) {
       console.error("Error resetting database:", error);
@@ -196,7 +202,9 @@ class DatabaseService {
         const movements = await window.electron.getMovements();
         return movements;
       } else {
-        // Mock implementation for development
+        console.error(
+          "Electron bridge not available. Cannot get usage statistics."
+        );
         return [];
       }
     } catch (error) {
