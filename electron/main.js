@@ -366,23 +366,32 @@ async function processImportedData(records) {
           `Updated device: ${deviceId} with usage: ${inUsePercentage}%`
         );
 
-        // Sort records by time (if available)
         deviceRecs.sort((a, b) => {
-          const timeA = a.in || a.In || a.timeIn || "";
-          const timeB = b.in || b.In || b.timeIn || "";
-          return timeA.localeCompare(timeB);
+          const timeA = new Date(a.in || a.In || a.timeIn || 0);
+          const timeB = new Date(b.in || b.In || b.timeIn || 0);
+          return timeA - timeB;
         });
 
         // Create movement records by pairing consecutive locations
         for (let i = 0; i < deviceRecs.length - 1; i++) {
+
           const currentRecord = deviceRecs[i];
           const nextRecord = deviceRecs[i + 1];
-
+          
+          // Get times
+          const currentTime = new Date(currentRecord.in || currentRecord.In || currentRecord.timeIn);
+          const nextTime = new Date(nextRecord.in || nextRecord.In || nextRecord.timeIn);
+          
+          // Validate that next time is AFTER current time
+          if (!currentTime || !nextTime || nextTime < currentTime) {
+            console.log(`Skipping invalid movement for ${deviceId}: nextTime (${nextTime}) is not after currentTime (${currentTime})`);
+            continue; // Skip bad movement
+          }
+          
           // Get locations
-          const fromLocation =
-            currentRecord.normalizedLocation || "Unknown";
-          const toLocation =
-            nextRecord.normalizedLocation || "Unknown";
+          const fromLocation = currentRecord.normalizedLocation || "Unknown";
+          const toLocation = nextRecord.normalizedLocation || "Unknown";
+          
 
           // Skip movements where the device moves from the same room to the same room
           if (fromLocation === toLocation) {
