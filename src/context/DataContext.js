@@ -4,31 +4,31 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 const handleStandardTimePeriod = (mode, movements, setFilteredMovements) => {
   const now = new Date();
   let startDate = new Date(0); // Default to epoch start (all data)
-  
+
   // Calculate start date based on selected time filter mode
-  if (mode === 'day') {
+  if (mode === "day") {
     startDate = new Date(now);
     startDate.setHours(0, 0, 0, 0); // Start of today
-  } else if (mode === 'month') {
+  } else if (mode === "month") {
     startDate = new Date(now);
     startDate.setDate(1); // Start of current month
     startDate.setHours(0, 0, 0, 0);
-  } else if (mode === '3months' || mode === 'quarter') {
+  } else if (mode === "3months" || mode === "quarter") {
     startDate = new Date(now);
     startDate.setMonth(startDate.getMonth() - 3); // 3 months ago
     startDate.setHours(0, 0, 0, 0);
-  } else if (mode === 'year') {
+  } else if (mode === "year") {
     startDate = new Date(now);
     startDate.setFullYear(startDate.getFullYear() - 1); // 1 year ago
     startDate.setHours(0, 0, 0, 0);
   }
-  
+
   // Filter movements by date
-  const filtered = movements.filter(movement => {
+  const filtered = movements.filter((movement) => {
     const movementDate = new Date(movement.timeIn || movement.In || 0);
     return movementDate >= startDate;
   });
-  
+
   setFilteredMovements(filtered);
 };
 
@@ -67,10 +67,14 @@ export const DataProvider = ({ children }) => {
   const [filteredMovements, setFilteredMovements] = useState([]);
   const [recommendations, setRecommendations] = useState([]);
   const [optimizationHistory, setOptimizationHistory] = useState([]);
-  const [filteredOptimizationHistory, setFilteredOptimizationHistory] = useState([]);
+  const [filteredOptimizationHistory, setFilteredOptimizationHistory] =
+    useState([]);
   const [totalSavings, setTotalSavings] = useState({ hours: 0, money: 0 });
-  const [filteredTotalSavings, setFilteredTotalSavings] = useState({ hours: 0, money: 0 });
-  const [timeFilter, setTimeFilter] = useState('all');
+  const [filteredTotalSavings, setFilteredTotalSavings] = useState({
+    hours: 0,
+    money: 0,
+  });
+  const [timeFilter, setTimeFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -238,74 +242,71 @@ export const DataProvider = ({ children }) => {
   // Filter data based on selected time period
   useEffect(() => {
     // Extract mode from timeFilter (handle both string and object formats)
-    const mode = typeof timeFilter === 'string' ? timeFilter : (timeFilter.mode || 'all');
-    
+    const mode =
+      typeof timeFilter === "string" ? timeFilter : timeFilter.mode || "all";
+
     // Filter movements based on time period
     if (movements && movements.length > 0) {
       const now = new Date();
       let startDate = new Date(0); // Default to epoch start (all data)
-      
+
       // Handle specific date selections if timeFilter is an object
-      if (typeof timeFilter === 'object') {
-        if (mode === 'day' && timeFilter.day) {
+      if (typeof timeFilter === "object") {
+        if (mode === "day" && timeFilter.day) {
           // If a specific day is selected, use that day
           startDate = new Date(timeFilter.day);
           const endDate = new Date(startDate);
           endDate.setDate(endDate.getDate() + 1); // End of the selected day
-          
+
           // Filter movements for the specific day
-          const filtered = movements.filter(movement => {
+          const filtered = movements.filter((movement) => {
             const movementDate = new Date(movement.timeIn || movement.In || 0);
             return movementDate >= startDate && movementDate < endDate;
           });
-          
+
           setFilteredMovements(filtered);
-          
-        } else if (mode === 'month' && timeFilter.month) {
+        } else if (mode === "month" && timeFilter.month) {
           // If a specific month is selected, use that month
-          const [year, month] = timeFilter.month.split('-');
+          const [year, month] = timeFilter.month.split("-");
           startDate = new Date(parseInt(year), parseInt(month) - 1, 1); // Start of the selected month
           const endDate = new Date(parseInt(year), parseInt(month), 0); // End of the selected month
           endDate.setHours(23, 59, 59, 999);
-          
+
           // Filter movements for the specific month
-          const filtered = movements.filter(movement => {
+          const filtered = movements.filter((movement) => {
             const movementDate = new Date(movement.timeIn || movement.In || 0);
             return movementDate >= startDate && movementDate <= endDate;
           });
-          
+
           setFilteredMovements(filtered);
-          
-        } else if (mode === 'quarter' && timeFilter.quarter) {
+        } else if (mode === "quarter" && timeFilter.quarter) {
           // If a specific quarter is selected, use that quarter
-          const [year, quarterStr] = timeFilter.quarter.split('-');
+          const [year, quarterStr] = timeFilter.quarter.split("-");
           const quarter = parseInt(quarterStr.substring(1));
           const startMonth = (quarter - 1) * 3;
           startDate = new Date(parseInt(year), startMonth, 1); // Start of the selected quarter
           const endDate = new Date(parseInt(year), startMonth + 3, 0); // End of the selected quarter
           endDate.setHours(23, 59, 59, 999);
-          
+
           // Filter movements for the specific quarter
-          const filtered = movements.filter(movement => {
+          const filtered = movements.filter((movement) => {
             const movementDate = new Date(movement.timeIn || movement.In || 0);
             return movementDate >= startDate && movementDate <= endDate;
           });
-          
+
           setFilteredMovements(filtered);
-          
-        } else if (mode === 'year' && timeFilter.year) {
+        } else if (mode === "year" && timeFilter.year) {
           // If a specific year is selected, use that year
           startDate = new Date(timeFilter.year, 0, 1); // Start of the selected year
           const endDate = new Date(timeFilter.year, 11, 31, 23, 59, 59, 999); // End of the selected year
-          
+
           // Filter movements for the specific year
-          const filtered = movements.filter(movement => {
+          const filtered = movements.filter((movement) => {
             const movementDate = new Date(movement.timeIn || movement.In || 0);
             return movementDate >= startDate && movementDate <= endDate;
           });
-          
+
           setFilteredMovements(filtered);
-          
         } else {
           // Handle standard time periods
           handleStandardTimePeriod(mode, movements, setFilteredMovements);
@@ -317,110 +318,108 @@ export const DataProvider = ({ children }) => {
     } else {
       setFilteredMovements([]);
     }
-    
+
     // Filter optimization history based on time period
     if (optimizationHistory && optimizationHistory.length > 0) {
       const now = new Date();
       let startDate = new Date(0); // Default to epoch start (all data)
-      
+
       // Extract mode from timeFilter
-      const mode = typeof timeFilter === 'string' ? timeFilter : (timeFilter.mode || 'all');
-      
+      const mode =
+        typeof timeFilter === "string" ? timeFilter : timeFilter.mode || "all";
+
       // Handle specific date selections for optimization history if timeFilter is an object
-      if (typeof timeFilter === 'object') {
-        if (mode === 'day' && timeFilter.day) {
+      if (typeof timeFilter === "object") {
+        if (mode === "day" && timeFilter.day) {
           // If a specific day is selected, use that day
           startDate = new Date(timeFilter.day);
           const endDate = new Date(startDate);
           endDate.setDate(endDate.getDate() + 1); // End of the selected day
-          
+
           // Filter history for the specific day
-          const filtered = optimizationHistory.filter(item => {
+          const filtered = optimizationHistory.filter((item) => {
             const itemDate = new Date(item.date || 0);
             return itemDate >= startDate && itemDate < endDate;
           });
-          
+
           setFilteredOptimizationHistory(filtered);
           calculateFilteredSavings(filtered);
           return;
-          
-        } else if (mode === 'month' && timeFilter.month) {
+        } else if (mode === "month" && timeFilter.month) {
           // If a specific month is selected, use that month
-          const [year, month] = timeFilter.month.split('-');
+          const [year, month] = timeFilter.month.split("-");
           startDate = new Date(parseInt(year), parseInt(month) - 1, 1); // Start of the selected month
           const endDate = new Date(parseInt(year), parseInt(month), 0); // End of the selected month
           endDate.setHours(23, 59, 59, 999);
-          
+
           // Filter history for the specific month
-          const filtered = optimizationHistory.filter(item => {
+          const filtered = optimizationHistory.filter((item) => {
             const itemDate = new Date(item.date || 0);
             return itemDate >= startDate && itemDate <= endDate;
           });
-          
+
           setFilteredOptimizationHistory(filtered);
           calculateFilteredSavings(filtered);
           return;
-          
-        } else if (mode === 'quarter' && timeFilter.quarter) {
+        } else if (mode === "quarter" && timeFilter.quarter) {
           // If a specific quarter is selected, use that quarter
-          const [year, quarterStr] = timeFilter.quarter.split('-');
+          const [year, quarterStr] = timeFilter.quarter.split("-");
           const quarter = parseInt(quarterStr.substring(1));
           const startMonth = (quarter - 1) * 3;
           startDate = new Date(parseInt(year), startMonth, 1); // Start of the selected quarter
           const endDate = new Date(parseInt(year), startMonth + 3, 0); // End of the selected quarter
           endDate.setHours(23, 59, 59, 999);
-          
+
           // Filter history for the specific quarter
-          const filtered = optimizationHistory.filter(item => {
+          const filtered = optimizationHistory.filter((item) => {
             const itemDate = new Date(item.date || 0);
             return itemDate >= startDate && itemDate <= endDate;
           });
-          
+
           setFilteredOptimizationHistory(filtered);
           calculateFilteredSavings(filtered);
           return;
-          
-        } else if (mode === 'year' && timeFilter.year) {
+        } else if (mode === "year" && timeFilter.year) {
           // If a specific year is selected, use that year
           startDate = new Date(timeFilter.year, 0, 1); // Start of the selected year
           const endDate = new Date(timeFilter.year, 11, 31, 23, 59, 59, 999); // End of the selected year
-          
+
           // Filter history for the specific year
-          const filtered = optimizationHistory.filter(item => {
+          const filtered = optimizationHistory.filter((item) => {
             const itemDate = new Date(item.date || 0);
             return itemDate >= startDate && itemDate <= endDate;
           });
-          
+
           setFilteredOptimizationHistory(filtered);
           calculateFilteredSavings(filtered);
           return;
         }
       }
-      
+
       // Handle standard time periods for optimization history
-      if (mode === 'day') {
+      if (mode === "day") {
         startDate = new Date(now);
         startDate.setHours(0, 0, 0, 0); // Start of today
-      } else if (mode === 'month') {
+      } else if (mode === "month") {
         startDate = new Date(now);
         startDate.setDate(1); // Start of current month
         startDate.setHours(0, 0, 0, 0);
-      } else if (mode === '3months' || mode === 'quarter') {
+      } else if (mode === "3months" || mode === "quarter") {
         startDate = new Date(now);
         startDate.setMonth(startDate.getMonth() - 3); // 3 months ago
         startDate.setHours(0, 0, 0, 0);
-      } else if (mode === 'year') {
+      } else if (mode === "year") {
         startDate = new Date(now);
         startDate.setFullYear(startDate.getFullYear() - 1); // 1 year ago
         startDate.setHours(0, 0, 0, 0);
       }
-      
+
       // Filter history by date
-      const filtered = optimizationHistory.filter(item => {
+      const filtered = optimizationHistory.filter((item) => {
         const itemDate = new Date(item.date || 0);
         return itemDate >= startDate;
       });
-      
+
       setFilteredOptimizationHistory(filtered);
       calculateFilteredSavings(filtered);
     } else {
@@ -428,25 +427,26 @@ export const DataProvider = ({ children }) => {
       setFilteredTotalSavings({ hours: 0, money: 0 });
     }
   }, [movements, optimizationHistory, timeFilter]);
-  
+
   // Helper function to calculate filtered total savings
   const calculateFilteredSavings = (filtered) => {
     let totalHours = 0;
-    filtered.forEach(item => {
+    filtered.forEach((item) => {
       // Ensure we're using hoursSaved if available, or parse it from savings string
-      const hours = item.hoursSaved !== undefined ?
-        parseFloat(item.hoursSaved || 0) :
-        parseHoursSaved(item.impact || item.savings || "");
-      
+      const hours =
+        item.hoursSaved !== undefined
+          ? parseFloat(item.hoursSaved || 0)
+          : parseHoursSaved(item.impact || item.savings || "");
+
       totalHours += hours;
     });
-    
+
     // Convert hours to money (assuming $50/hour labor cost)
     const totalMoney = totalHours * 50;
-    
+
     setFilteredTotalSavings({
       hours: parseFloat(totalHours.toFixed(2)),
-      money: parseFloat(totalMoney.toFixed(2))
+      money: parseFloat(totalMoney.toFixed(2)),
     });
   };
 
@@ -480,10 +480,31 @@ export const DataProvider = ({ children }) => {
           };
         }
 
+        // Important: We're not using DatabaseService's mock implementation anymore
+        // We're only using OptimizationService for generating recommendations
+
         try {
-          // Import OptimizationService
-          const optimizationService =
-            require("../services/OptimizationService").default;
+          // Import OptimizationService - use dynamic import to avoid caching issues
+          const OptimizationServiceModule = await import(
+            "../services/OptimizationService"
+          );
+
+          // Check if the imported module is valid and has the default export
+          if (
+            !OptimizationServiceModule ||
+            !OptimizationServiceModule.default
+          ) {
+            console.error("OptimizationService module is invalid or empty");
+            setError(
+              "Failed to load optimization service. Please check the console for details."
+            );
+            return {
+              success: false,
+              message: "Failed to load optimization service",
+            };
+          }
+
+          const optimizationService = OptimizationServiceModule.default;
 
           // Load graph data
           let graphData = null;
@@ -511,6 +532,21 @@ export const DataProvider = ({ children }) => {
             console.error("Error loading floor plan data:", error);
           }
 
+          // Check if the optimization service has the required methods
+          if (
+            !optimizationService.initialize ||
+            !optimizationService.generateRecommendations
+          ) {
+            console.error("OptimizationService is missing required methods");
+            setError(
+              "Optimization service is invalid. Please check the console for details."
+            );
+            return {
+              success: false,
+              message: "Optimization service is invalid",
+            };
+          }
+
           // Initialize the optimization service with the graph and floor plan data
           optimizationService.initialize(graphData, floorPlanData);
 
@@ -522,46 +558,139 @@ export const DataProvider = ({ children }) => {
             console.log(
               `Generated ${generatedRecommendations.length} recommendations with updated calculation method`
             );
-            console.log("Generated recommendations details:", JSON.stringify(generatedRecommendations, null, 2));
-            
+            console.log(
+              "Generated recommendations details:",
+              JSON.stringify(generatedRecommendations, null, 2)
+            );
+
             // Log each recommendation's hoursSaved, distanceSaved, and movementsPerMonth
             generatedRecommendations.forEach((rec, index) => {
               console.log(`Recommendation ${index + 1} - ${rec.title}:`);
-              console.log(`  hoursSaved: ${rec.hoursSaved} (type: ${typeof rec.hoursSaved})`);
-              console.log(`  distanceSaved: ${rec.distanceSaved} (type: ${typeof rec.distanceSaved})`);
-              console.log(`  movementsPerMonth: ${rec.movementsPerMonth} (type: ${typeof rec.movementsPerMonth})`);
+              console.log(
+                `  hoursSaved: ${
+                  rec.hoursSaved
+                } (type: ${typeof rec.hoursSaved})`
+              );
+              console.log(
+                `  distanceSaved: ${
+                  rec.distanceSaved
+                } (type: ${typeof rec.distanceSaved})`
+              );
+              console.log(
+                `  movementsPerMonth: ${
+                  rec.movementsPerMonth
+                } (type: ${typeof rec.movementsPerMonth})`
+              );
             });
-            
+
             // Ensure all recommendations have the required properties
-            const enhancedRecommendations = generatedRecommendations.map(rec => {
-              const enhanced = {
-                ...rec,
-                hoursSaved: rec.hoursSaved !== undefined ? parseFloat(rec.hoursSaved || 0) : 0,
-                distanceSaved: rec.distanceSaved !== undefined ? parseFloat(rec.distanceSaved || 0) : 0,
-                movementsPerMonth: rec.movementsPerMonth !== undefined ? parseFloat(rec.movementsPerMonth || 0) : 0
-              };
-              
-              console.log(`Enhanced recommendation ${rec.title}:`);
-              console.log(`  hoursSaved: ${enhanced.hoursSaved} (type: ${typeof enhanced.hoursSaved})`);
-              console.log(`  distanceSaved: ${enhanced.distanceSaved} (type: ${typeof enhanced.distanceSaved})`);
-              console.log(`  movementsPerMonth: ${enhanced.movementsPerMonth} (type: ${typeof enhanced.movementsPerMonth})`);
-              
-              return enhanced;
-            });
-            
-            console.log("Enhanced recommendations:", JSON.stringify(enhancedRecommendations, null, 2));
+            const enhancedRecommendations = generatedRecommendations.map(
+              (rec) => {
+                const enhanced = {
+                  ...rec,
+                  hoursSaved:
+                    rec.hoursSaved !== undefined
+                      ? parseFloat(rec.hoursSaved || 0)
+                      : 0,
+                  distanceSaved:
+                    rec.distanceSaved !== undefined
+                      ? parseFloat(rec.distanceSaved || 0)
+                      : 0,
+                  movementsPerMonth:
+                    rec.movementsPerMonth !== undefined
+                      ? parseFloat(rec.movementsPerMonth || 0)
+                      : 0,
+                  // Preserve our new distance metrics
+                  currentTotalDistance:
+                    rec.currentTotalDistance !== undefined
+                      ? Math.round(rec.currentTotalDistance || 0)
+                      : 0,
+                  optimalTotalDistance:
+                    rec.optimalTotalDistance !== undefined
+                      ? Math.round(rec.optimalTotalDistance || 0)
+                      : 0,
+                  overallTotalDistance:
+                    rec.overallTotalDistance !== undefined
+                      ? Math.round(rec.overallTotalDistance || 0)
+                      : 0,
+                  storageTypeTotalDistance:
+                    rec.storageTypeTotalDistance !== undefined
+                      ? Math.round(rec.storageTypeTotalDistance || 0)
+                      : 0,
+                  percentImprovement:
+                    rec.percentImprovement !== undefined
+                      ? Math.round(rec.percentImprovement || 0)
+                      : 0,
+                  bestOverallLocation: rec.bestOverallLocation || null,
+                  bestStorageTypeLocation: rec.bestStorageTypeLocation || null,
+                };
+
+                console.log(`Enhanced recommendation ${rec.title}:`);
+                console.log(
+                  `  hoursSaved: ${
+                    enhanced.hoursSaved
+                  } (type: ${typeof enhanced.hoursSaved})`
+                );
+                console.log(
+                  `  distanceSaved: ${
+                    enhanced.distanceSaved
+                  } (type: ${typeof enhanced.distanceSaved})`
+                );
+                console.log(
+                  `  movementsPerMonth: ${
+                    enhanced.movementsPerMonth
+                  } (type: ${typeof enhanced.movementsPerMonth})`
+                );
+                console.log(
+                  `  currentTotalDistance: ${
+                    enhanced.currentTotalDistance
+                  } (type: ${typeof enhanced.currentTotalDistance})`
+                );
+                console.log(
+                  `  optimalTotalDistance: ${
+                    enhanced.optimalTotalDistance
+                  } (type: ${typeof enhanced.optimalTotalDistance})`
+                );
+                console.log(
+                  `  overallTotalDistance: ${
+                    enhanced.overallTotalDistance
+                  } (type: ${typeof enhanced.overallTotalDistance})`
+                );
+                console.log(
+                  `  bestOverallLocation: ${enhanced.bestOverallLocation}`
+                );
+
+                return enhanced;
+              }
+            );
+
+            console.log(
+              "Enhanced recommendations:",
+              JSON.stringify(enhancedRecommendations, null, 2)
+            );
             setRecommendations(enhancedRecommendations);
             return { success: true };
           } else {
             // No recommendations were generated, show an error
             console.error("No recommendations could be generated");
-            setError("No recommendations could be generated. Please check your data and try again.");
-            return { success: false, message: "No recommendations could be generated" };
+            setError(
+              "No recommendations could be generated. Please check your data and try again."
+            );
+            return {
+              success: false,
+              message: "No recommendations could be generated",
+            };
           }
         } catch (error) {
           console.error("Error generating recommendations:", error);
           setError("Failed to generate recommendations: " + error.message);
-          return { success: false, message: error.message };
+
+          // Don't silently fall back to DatabaseService's mock implementation
+          // Return an error instead
+          return {
+            success: false,
+            message: "Failed to generate recommendations: " + error.message,
+          };
         }
       }
     } catch (err) {
@@ -600,9 +729,9 @@ export const DataProvider = ({ children }) => {
             description: recommendation.description,
             impact: recommendation.savings,
             hoursSaved:
-              recommendation.hoursSaved !== undefined ?
-              parseFloat(recommendation.hoursSaved || 0) :
-              parseHoursSaved(recommendation.savings),
+              recommendation.hoursSaved !== undefined
+                ? parseFloat(recommendation.hoursSaved || 0)
+                : parseHoursSaved(recommendation.savings),
             distanceSaved: recommendation.distanceSaved || 0,
             movementsPerMonth: recommendation.movementsPerMonth || 0,
             deviceId: recommendation.deviceId,
@@ -622,7 +751,8 @@ export const DataProvider = ({ children }) => {
           // Update total savings
           const hoursSaved = parseFloat(
             recommendation.hoursSaved ||
-            parseHoursSaved(recommendation.savings) || 0
+              parseHoursSaved(recommendation.savings) ||
+              0
           );
           setTotalSavings((prev) => ({
             hours: parseFloat(prev.hours || 0) + hoursSaved,
@@ -650,9 +780,9 @@ export const DataProvider = ({ children }) => {
           description: recommendation.description,
           impact: recommendation.savings,
           hoursSaved:
-            recommendation.hoursSaved !== undefined ?
-            parseFloat(recommendation.hoursSaved || 0) :
-            parseHoursSaved(recommendation.savings),
+            recommendation.hoursSaved !== undefined
+              ? parseFloat(recommendation.hoursSaved || 0)
+              : parseHoursSaved(recommendation.savings),
           distanceSaved: recommendation.distanceSaved || 0,
           movementsPerMonth: recommendation.movementsPerMonth || 0,
           deviceId: recommendation.deviceId,
@@ -672,7 +802,8 @@ export const DataProvider = ({ children }) => {
         // Update total savings
         const hoursSaved = parseFloat(
           recommendation.hoursSaved ||
-          parseHoursSaved(recommendation.savings) || 0
+            parseHoursSaved(recommendation.savings) ||
+            0
         );
         setTotalSavings((prev) => ({
           hours: parseFloat(prev.hours || 0) + hoursSaved,
@@ -828,9 +959,9 @@ export const DataProvider = ({ children }) => {
             description: recommendation.description,
             impact: recommendation.savings,
             hoursSaved: parseFloat(
-              recommendation.hoursSaved !== undefined ?
-              recommendation.hoursSaved || 0 :
-              parseHoursSaved(recommendation.savings) || 0
+              recommendation.hoursSaved !== undefined
+                ? recommendation.hoursSaved || 0
+                : parseHoursSaved(recommendation.savings) || 0
             ),
             distanceSaved: recommendation.distanceSaved || 0,
             movementsPerMonth: recommendation.movementsPerMonth || 0,
@@ -876,9 +1007,9 @@ export const DataProvider = ({ children }) => {
           description: recommendation.description,
           impact: recommendation.savings,
           hoursSaved: parseFloat(
-            recommendation.hoursSaved !== undefined ?
-            recommendation.hoursSaved || 0 :
-            parseHoursSaved(recommendation.savings) || 0
+            recommendation.hoursSaved !== undefined
+              ? recommendation.hoursSaved || 0
+              : parseHoursSaved(recommendation.savings) || 0
           ),
           distanceSaved: recommendation.distanceSaved || 0,
           movementsPerMonth: recommendation.movementsPerMonth || 0,

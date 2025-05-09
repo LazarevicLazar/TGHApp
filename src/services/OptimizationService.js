@@ -7,12 +7,12 @@
  * 3. Maintenance scheduling optimization using predictive modeling
  */
 
-import { calculateDistance } from "../utils/helpers";
+import { calculateDistance } from "../utils/helpers.js";
 import {
   Equipment,
   findOptimalStorageLocation,
   createGraph,
-} from "../algorithms/equipment_optimizer";
+} from "../algorithms/equipment_optimizer.js";
 
 class OptimizationService {
   constructor() {
@@ -44,10 +44,14 @@ class OptimizationService {
    * @returns {Array} Optimization recommendations
    */
   optimizeWalkingDistance(movements) {
-    console.log("optimizeWalkingDistance called with", movements.length, "movements");
+    console.log(
+      "optimizeWalkingDistance called with",
+      movements.length,
+      "movements"
+    );
     console.log("Graph data available:", !!this.graphData);
     console.log("Graph object available:", !!this.graph);
-    
+
     if (
       !this.graphData ||
       !this.graph ||
@@ -93,11 +97,20 @@ class OptimizationService {
 
       // Analyze each device
       Object.entries(deviceMap).forEach(([deviceId, equipment]) => {
-        console.log("Analyzing device:", deviceId, "with", equipment.usageHistory.length, "usage records");
-        
+        console.log(
+          "Analyzing device:",
+          deviceId,
+          "with",
+          equipment.usageHistory.length,
+          "usage records"
+        );
+
         // Skip if not enough usage history
         if (equipment.usageHistory.length < 3) {
-          console.log("Skipping device with insufficient usage history:", deviceId);
+          console.log(
+            "Skipping device with insufficient usage history:",
+            deviceId
+          );
           return;
         }
 
@@ -124,7 +137,11 @@ class OptimizationService {
               result.optimalLocation
             } would reduce staff walking distance by approximately ${Math.round(
               result.percentImprovement
-            )}% (${Math.round(result.distanceSaved)} feet) and save ~${parseFloat(result.hoursSaved || 0).toFixed(1)} hours/month.`,
+            )}% (${Math.round(
+              result.distanceSaved
+            )} feet) and save ~${parseFloat(result.hoursSaved || 0).toFixed(
+              1
+            )} hours/month.`,
             savings: `~${parseFloat(result.hoursSaved || 0).toFixed(
               1
             )} hours/month based on ${Math.round(
@@ -135,19 +152,36 @@ class OptimizationService {
             deviceId: deviceId,
             currentLocation: result.currentLocation,
             optimalLocation: result.optimalLocation,
+            bestOverallLocation: result.bestOverallLocation,
+            bestStorageTypeLocation: result.bestStorageTypeLocation,
             distanceSaved: Math.round(result.distanceSaved || 0),
             hoursSaved: parseFloat(result.hoursSaved || 0),
             movementsPerMonth: parseFloat(result.movementsPerMonth || 0),
+            currentTotalDistance: Math.round(result.currentTotalDistance || 0),
+            optimalTotalDistance: Math.round(result.optimalTotalDistance || 0),
+            overallTotalDistance: Math.round(result.overallTotalDistance || 0),
+            storageTypeTotalDistance: Math.round(
+              result.storageTypeTotalDistance || 0
+            ),
+            percentImprovement: Math.round(result.percentImprovement || 0),
           };
-          
+
           console.log("Created recommendation:", recommendation);
           recommendations.push(recommendation);
         } else {
-          console.log("No significant improvement for", deviceId, "- not creating recommendation");
+          console.log(
+            "No significant improvement for",
+            deviceId,
+            "- not creating recommendation"
+          );
         }
       });
-      
-      console.log("Generated", recommendations.length, "walking distance recommendations");
+
+      console.log(
+        "Generated",
+        recommendations.length,
+        "walking distance recommendations"
+      );
     } catch (error) {
       console.error("Error in walking distance optimization:", error);
     }
@@ -197,7 +231,7 @@ class OptimizationService {
           }
         }
 
-        return 100; // Default distance if not found
+        return null; // Default distance if not found
       }
 
       // Dijkstra's algorithm
@@ -465,39 +499,29 @@ class OptimizationService {
         // Skip if not enough usage history
         if (equipment.usageHistory.length < 3) return;
 
-        // Check if maintenance is needed
-        const maintenanceResult = equipment.needsMaintenance();
+        // Analyze maintenance needs
+        const maintenanceNeeded = equipment.needsMaintenance();
 
-        if (maintenanceResult.needsMaintenance) {
-          const deviceType = maintenanceResult.deviceType;
-          const urgency =
-            maintenanceResult.urgencyLevel >= 1 ? "urgent" : "upcoming";
-          const timeframe =
-            maintenanceResult.urgencyLevel >= 1
-              ? "immediately"
-              : "within the next month";
+        if (maintenanceNeeded.needed) {
+          const deviceType = deviceId.split("-")[0] || "Unknown";
+          const metrics = maintenanceNeeded.metrics;
 
           recommendations.push({
             _id: `maintenance_${deviceId}_${Date.now()}`,
             type: "maintenance",
-            title: `${
-              urgency === "urgent" ? "Urgent" : "Scheduled"
-            } Maintenance for ${deviceId}`,
-            description: `Based on usage patterns (${Math.round(
-              maintenanceResult.hoursUsed
-            )} hours of operation),
-              ${deviceId} requires ${urgency} maintenance ${timeframe}.
-              This device has reached ${Math.round(
-                maintenanceResult.urgencyLevel * 100
-              )}% of its maintenance threshold.`,
-            savings:
-              "Preventative maintenance reduces downtime and extends equipment lifespan",
+            title: `Schedule ${deviceType} Maintenance`,
+            description: `${deviceId} has been in use for ${Math.round(
+              metrics.totalUsageHours
+            )} hours across ${
+              metrics.totalMovements
+            } movements. Recommend scheduling maintenance within the next ${Math.round(
+              metrics.daysUntilMaintenance
+            )} days.`,
+            savings: `Prevent downtime and extend equipment lifespan`,
             implemented: false,
             createdAt: new Date().toISOString(),
             deviceId: deviceId,
-            hoursUsed: Math.round(maintenanceResult.hoursUsed),
-            threshold: maintenanceResult.threshold,
-            urgencyLevel: maintenanceResult.urgencyLevel,
+            metrics: metrics,
             hoursSaved: 0,
             distanceSaved: 0,
             movementsPerMonth: 0,
@@ -512,44 +536,34 @@ class OptimizationService {
   }
 
   /**
-   * Generate comprehensive optimization recommendations
+   * Generate all recommendations for the given movement data
    * @param {Array} movements - The movement data to analyze
-   * @returns {Array} Combined optimization recommendations
+   * @returns {Array} All recommendations
    */
   generateRecommendations(movements) {
     if (!movements || movements.length === 0) {
       return [];
     }
 
-    const recommendations = [];
-
     try {
-      // Walking distance optimization
+      // Generate all types of recommendations
       const walkingRecs = this.optimizeWalkingDistance(movements);
-      console.log("Walking distance recommendations:", walkingRecs);
-      recommendations.push(...walkingRecs);
-
-      // Utilization analysis
       const utilizationResults = this.analyzeUtilization(movements);
-      recommendations.push(...utilizationResults.recommendations);
-
-      // Maintenance prediction
       const maintenanceRecs = this.predictMaintenance(movements);
-      recommendations.push(...maintenanceRecs);
 
-      // Sort by type and creation date
-      const sortedRecommendations = recommendations.sort((a, b) => {
-        if (a.type !== b.type) {
-          const typeOrder = { placement: 1, purchase: 2, maintenance: 3 };
-          return typeOrder[a.type] - typeOrder[b.type];
-        }
-        return new Date(b.createdAt) - new Date(a.createdAt);
+      // Combine all recommendations
+      const allRecommendations = [
+        ...walkingRecs,
+        ...utilizationResults.recommendations,
+        ...maintenanceRecs,
+      ];
+
+      // Sort by potential savings (hours saved)
+      allRecommendations.sort((a, b) => {
+        return (b.hoursSaved || 0) - (a.hoursSaved || 0);
       });
-      
-      // Log the final recommendations
-      console.log("Final recommendations:", sortedRecommendations);
-      
-      return sortedRecommendations;
+
+      return allRecommendations;
     } catch (error) {
       console.error("Error generating recommendations:", error);
       return [];
@@ -557,6 +571,4 @@ class OptimizationService {
   }
 }
 
-// Create and export a singleton instance
-const optimizationService = new OptimizationService();
-export default optimizationService;
+export default OptimizationService;
