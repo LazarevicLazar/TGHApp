@@ -222,6 +222,15 @@ function normalizeLocationName(device, location) {
     "Emergency Department, POD 5 East Nurses Station": "K2511",
     "Emergency Department, ED POD 2 Nurses Station": "K2216",
     "Emergency Department, ED POD 3 Nurses Station": "K2316",
+    "POD 4 West Nurses Station": "K2415",
+    "POD 5 West Nurses Station": "K2513",
+    "POD 5 East Nurses Station": "K2511",
+    "ED POD 2 Nurses Station": "K2216",
+    "ED POD 3 Nurses Station": "K2316",
+    "PIVOT #1": "K2020",
+    "PIVOT #2": "K2022",
+    "PIVOT #3": "K2021",
+    "PEDS ED Nurses Station": "K2116",
   }
 
   const kPattern = /K\d{4}[A-Z]?/;
